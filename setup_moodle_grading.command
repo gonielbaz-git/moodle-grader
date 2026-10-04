@@ -68,7 +68,10 @@ python3 - "$TARGET" "$BUNDLE" "$WORKSHEET" "$N" "$COURSE" "$CONFIG" <<'PYEOF'
 import csv, json, os, re, sys, zipfile
 
 FOLDER, BUNDLE, WORKSHEET, N, COURSE, CONFIG = sys.argv[1:7]
-cfg = json.load(open(CONFIG, encoding='utf-8'))['courses'].get(COURSE, {})
+courses = json.load(open(CONFIG, encoding='utf-8'))['courses']
+if COURSE not in courses:
+    sys.exit(f"❌ Course '{COURSE}' is not in courses.json (known: {', '.join(courses)}). Nothing was changed.")
+cfg = courses[COURSE]
 scheme  = cfg.get('scheme', 'pass_fail')
 maxG    = cfg.get('maxGrade', 100)
 section = cfg.get('section', '')
@@ -136,7 +139,7 @@ for row in csv_all_rows:
     sub_date = (row[header[cols['submitDate']]] if cols['submitDate'] >= 0 else '').strip()
     # Submitted, but nothing we can show as a PDF (image/docx/online text) — must not be auto-failed.
     submitted = sub_date not in ('', '-') or bool(pid and id_to_other.get(pid))
-    students.append({'name': name, 'pdfFile': './'+pdf if pdf else None,
+    students.append({'name': name, 'id': pid or '', 'pdfFile': './'+pdf if pdf else None,
                      'pdfFiles': ['./'+x for x in pdfs], 'submitted': submitted,
                      'otherFiles': id_to_other.get(pid, []) if pid else [],
                      'submitDate': row[header[cols['submitDate']]] if cols['submitDate'] >= 0 else '',
@@ -158,6 +161,10 @@ ext = [s['name'] for s in students if s['hasExtension']]
 print(f"data.js: {len(students)} students | {matched} matched to PDFs (by ID) | {subm} submitted")
 if ext:
     print(f"⏳ {len(ext)} with a time extension — left ungraded, NOT auto-failed: " + ", ".join(ext))
+known = {s['id'] for s in students}
+stray = sorted(set(id_to_pdf) - known)
+if stray:
+    print(f"⚠️  {len(stray)} submission(s) in the zip belong to nobody in the worksheet (IDs {', '.join(stray)}) — re-download the worksheet.")
 nonpdf = [s['name'] for s in students if not s['pdfFile'] and s['submitted']]
 if nonpdf:
     print(f"📎 {len(nonpdf)} submitted something that is not a PDF — left ungraded, check in Moodle: " + ", ".join(nonpdf))

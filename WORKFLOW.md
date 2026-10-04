@@ -72,6 +72,9 @@ Add a block to `courses.json`:
   Anyone not in the CSV is simply skipped — re-download the worksheet if it's been sitting a while.
 - **Match by participant ID, not name.** Students name files anything.
 - **Non-PDF and multi-file submissions.** Someone who submitted an image/docx is left ungraded (not auto-failed) with a note to check Moodle; someone with several PDFs gets numbered file buttons in the grader.
+- **Two students with the same name.** Saved progress is tracked by participant ID, so they never share a grade. The bookmarklet can only see names on the Moodle page, so it leaves both rows empty and tells you to fill them by hand.
+- **Invalid grades are rejected.** A typo (`8o`), a grade above the maximum, or anything other than 0/100 in a binary course turns the box red, is not counted as graded and is not exported.
+- **Unknown course key.** The setup script stops instead of guessing a grading scheme.
 - **Each course + assignment keeps its own saved progress**, so two graders open at once don't overwrite each other.
 - **Pass/fail values must be `עובר` / `לא עובר`** (with the vav) to match the Moodle scale.
 - **Quick-grade Save submits every note field** — set grades and notes together, or blank fields overwrite existing notes. The bookmarklet handles this.

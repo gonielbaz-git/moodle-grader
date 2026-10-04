@@ -539,8 +539,9 @@ function matchPdfsToStudents(studentNames) {
   }));
   studentNames.forEach((name, idx) => {
     const t = normalizeName(name);
+    if (!t) return;
     let m = norm.find(n => n.norm === t);
-    if (!m) m = norm.find(n => n.norm.includes(t) || t.includes(n.norm));
+    if (!m) m = norm.find(n => n.norm.length >= 3 && (n.norm.includes(t) || t.includes(n.norm)));
     if (m) out[idx] = m.file;
   });
   return out;
@@ -695,6 +696,7 @@ function showStudent(idx) {
   document.getElementById('header-name').textContent = s.name;
   document.getElementById('header-pos').textContent = `${idx+1} מתוך ${state.students.length}`;
   document.getElementById('grade-input').value = s.grade || '';
+  markGradeInvalid(!!s.grade && !gradeValid(s.grade));
   document.getElementById('notes-input').value = s.notes || '';
   document.getElementById('submit-date').textContent = s.submitDate || '—';
 
@@ -720,16 +722,33 @@ function showStudent(idx) {
   renderList();
 }
 
+function curScheme() { return state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme; }
+function gradeValid(v) {
+  v = String(v == null ? '' : v).trim();
+  const sch = curScheme();
+  if (sch === 'pass_fail') return v === 'עובר' || v === 'לא עובר' || v === 'לא עבר';
+  if (!/^\d+(\.\d+)?$/.test(v)) return false;
+  if (sch === 'binary_0_100') return parseFloat(v) === 0 || parseFloat(v) === 100;
+  return parseFloat(v) <= (parseFloat(state.maxGrade) || 100);
+}
+function markGradeInvalid(bad) {
+  const inp = document.getElementById('grade-input');
+  inp.style.borderColor = bad ? '#dc2626' : ''; inp.style.background = bad ? '#fee2e2' : '';
+  inp.title = bad ? 'ציון לא תקין — לא יישמר כנבדק ולא ייוצא' : '';
+}
 function saveCurrent() {
   const s = state.students[state.currentIdx]; if (!s) return;
   // Only persist grade/notes/status if the user actually interacted with this student.
   // (Prevents auto-marking 'graded' just from navigating over a file.)
   if (!s._interacted) { saveState(); renderList(); return; }
-  s.grade = document.getElementById('grade-input').value;
+  s.grade = document.getElementById('grade-input').value.trim();
   s.notes = document.getElementById('notes-input').value;
-  if (s.grade !== '' || s.notes !== '') {
-    if (s.status !== 'skipped') s.status = 'graded';
-  }
+  const bad = s.grade !== '' && !gradeValid(s.grade);
+  markGradeInvalid(bad);
+  if (bad) s.status = 'pending';                       // typo / out of range: never counts as graded
+  else if (s.grade !== '') s.status = 'graded';        // a real grade always wins, even after "skip"
+  else if (s.notes !== '') { if (s.status !== 'skipped') s.status = 'graded'; }
+  else if (s.status === 'graded') s.status = 'pending'; // grade and note were both cleared
   saveState(); renderList();
 }
 
@@ -742,7 +761,7 @@ function exportCSV() {
   state.csvAllRows.forEach((origRow, idx) => {
     const newRow = state.csvHeader.map(h => origRow[h] || '');
     const student = state.students.find(s => s.csvRowIdx === idx);
-    if (student && (student.status === 'graded' || student.status === 'no_submission')) {
+    if (student && (student.status === 'graded' || student.status === 'no_submission') && (student.grade === '' || gradeValid(student.grade))) {
       // extension students are deliberately skipped — leave their row untouched
       if (state.cols.grade >= 0 && student.grade !== '') newRow[state.cols.grade] = student.grade;
       if (state.cols.feedback >= 0) newRow[state.cols.feedback] = student.notes || '';
@@ -776,9 +795,8 @@ function exportMoodlePush() {
       students.push({ name: s.name, verdict, note });
     } else {
       if (s.status === 'extension' && !s.grade) return; // extension -> not yet due, skip
-      if (s.grade === '' || s.grade == null) return;
+      if (s.grade === '' || s.grade == null || !gradeValid(s.grade)) return;
       const num = parseFloat(s.grade);
-      if (isNaN(num)) return;
       students.push({ name: s.name, grade: num, note });
     }
   });
@@ -812,21 +830,24 @@ async function initFromEmbedded(data) {
   state.csvAllRows = data.csvAllRows;
   // Merge with any previously saved grades/notes (same assignment key)
   const stored = loadStoredState();
+  // Key saved progress by Moodle participant id; two students can share a name.
+  const sameAssignment = stored && stored.assignmentName === data.assignmentName && stored.students;
+  const useId = sameAssignment && stored.students.every(s => s.id) && data.students.every(s => s.id);
+  const keyer = () => { const seen = {}; return s => useId ? 'id:' + s.id : 'n:' + s.name + '#' + (seen[s.name] = (seen[s.name] || 0) + 1); };
   const prevByName = {};
-  if (stored && stored.assignmentName === data.assignmentName && stored.students) {
-    stored.students.forEach(s => { prevByName[s.name] = s; });
-  }
+  if (sameAssignment) { const k = keyer(); stored.students.forEach(s => { prevByName[k(s)] = s; }); }
+  const dataKey = keyer();
   // Auto-mark students with no PDF as 'no_submission' with grade 0 (or "לא עבר" for pass_fail)
   const sch = state.gradingScheme;
   const noPdfGrade = (sch === 'pass_fail') ? 'לא עובר' : '0';
   state.students = data.students.map((s, idx) => {
-    const prev = prevByName[s.name];
+    const prev = prevByName[dataKey(s)];
     const hasPdf = !!s.pdfFile;
     // An approved extension means the deadline hasn't passed for them — leave blank, never auto-fail.
     if (!hasPdf && s.hasExtension) {
       const p = prev && (prev.grade || prev.notes) ? prev : null;
       return {
-        name: s.name, csvRowIdx: idx, pdfFileName: null,
+        name: s.name, id: s.id || '', csvRowIdx: idx, pdfFileName: null,
         grade: p ? p.grade : '', notes: p ? p.notes : '',
         status: p ? p.status : 'extension',
         submitDate: s.submitDate || '', onlineText: s.onlineText || '',
@@ -855,7 +876,7 @@ async function initFromEmbedded(data) {
       status = 'pending';
     }
     return {
-      name: s.name,
+      name: s.name, id: s.id || '',
       csvRowIdx: idx,
       pdfFileName: s.pdfFile,
       pdfFiles: s.pdfFiles || (s.pdfFile ? [s.pdfFile] : []),
@@ -992,6 +1013,7 @@ function showStudentEmbedded(idx) {
   document.getElementById('header-name').textContent = s.name;
   document.getElementById('header-pos').textContent = `${idx+1} מתוך ${state.students.length}`;
   document.getElementById('grade-input').value = s.grade || '';
+  markGradeInvalid(!!s.grade && !gradeValid(s.grade));
   document.getElementById('notes-input').value = s.notes || '';
   document.getElementById('submit-date').textContent = s.submitDate || '—';
   const noteBox = document.getElementById('student-note-box');
