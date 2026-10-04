@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Moodle Grader</title>
+<style>
+  :root {
+    --bg: #fbfaff;
+    --panel: #ffffff;
+    --border: #e8e4f3;
+    --border-strong: #d4ccef;
+    --accent: #7c3aed;          /* purple */
+    --accent-soft: #f0ebff;
+    --accent-deep: #5b21b6;
+    --teal: #0d9488;
+    --teal-soft: #ccfbf1;
+    --amber: #d97706;
+    --amber-soft: #fef3c7;
+    --rose: #e11d48;
+    --rose-soft: #ffe4e6;
+    --text: #1f1937;
+    --muted: #6b6486;
+    --muted-soft: #f6f4fb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif; background: var(--bg); color: var(--text); }
+  button { font: inherit; cursor: pointer; }
+
+  /* ===== SETUP SCREEN ===== */
+  #setup { max-width: 720px; margin: 40px auto; padding: 28px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 4px 24px rgba(124, 58, 237, 0.08); }
+  #setup h1 { margin: 0 0 6px; font-size: 26px; color: var(--accent-deep); }
+  #setup .sub { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+
+  .resume { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 14px 16px; border-radius: 10px; margin-bottom: 18px; border: 1px solid var(--amber); }
+  .resume strong { color: #78350f; }
+
+  .row { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
+  .row label { min-width: 130px; font-size: 14px; color: var(--text); }
+  .row input[type=text], .row input[type=number], .row select {
+    flex: 1; padding: 10px 12px; font: inherit; border: 1px solid var(--border-strong); border-radius: 8px; background: white;
+  }
+  .row input:focus, .row select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+  .drop { border: 2px dashed var(--border-strong); border-radius: 12px; padding: 22px; text-align: center; margin: 18px 0; background: var(--muted-soft); transition: 0.15s; }
+  .drop.hover { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.01); }
+  .drop label { cursor: pointer; }
+  .drop strong { color: var(--accent-deep); font-size: 16px; }
+  .drop input[type=file] { display: none; }
+  .drop .status { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+  .pick-folder-btn { background: var(--accent); color: white; border: none; padding: 14px 24px; border-radius: 10px; font-size: 16px; font-weight: 500; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3); transition: 0.15s; }
+  .pick-folder-btn:hover { background: var(--accent-deep); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4); }
+  .pick-folder-btn:disabled { background: #c4b5fd; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .ghost { background: white; border: 1px solid var(--border-strong); padding: 8px 14px; border-radius: 8px; color: var(--text); }
+  .ghost:hover { background: var(--muted-soft); }
+
+  .info-card { background: var(--accent-soft); border: 1px solid var(--border-strong); border-radius: 10px; padding: 14px; margin: 12px 0; font-size: 13px; color: var(--accent-deep); }
+  .info-card .files { margin-top: 6px; color: var(--text); font-size: 13px; }
+
+  .divider-or { display: flex; align-items: center; gap: 10px; color: var(--muted); margin: 16px 0; font-size: 12px; }
+  .divider-or::before, .divider-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ===== GRADER SCREEN ===== */
+  #grader { display: none; height: 100vh; flex-direction: row-reverse; background: var(--bg); }
+
+  /* Progress bar at top */
+  #progress-bar { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--muted-soft); z-index: 100; }
+  #progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--teal)); transition: width 0.3s; width: 0; }
+
+  #pdf-area { flex: 1; background: #2d2438; position: relative; padding-top: 4px; display: flex; flex-direction: column; }
+  #pdf-tabs { display: none; background: #1f1929; padding: 6px 10px; gap: 6px; border-bottom: 1px solid #3d3052; }
+  #pdf-tabs button { background: #3d3052; color: #d4ccef; border: 1px solid #4a3d63; padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: 0.1s; }
+  #pdf-tabs button:hover { background: #4a3d63; }
+  #pdf-tabs button.active { background: var(--accent); color: white; border-color: var(--accent); font-weight: 500; }
+  #pdf-tabs button kbd { background: rgba(0,0,0,0.3); border-radius: 3px; padding: 0 4px; margin-right: 5px; font-family: monospace; font-size: 11px; }
+  #pdf-area iframe { flex: 1; width: 100%; border: 0; display: block; min-height: 0; }
+  #pdf-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #b5a8c8; text-align: center; font-size: 14px; }
+
+  #side { width: 400px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; padding-top: 4px; }
+
+  .side-top { padding: 14px 18px 12px; background: linear-gradient(135deg, var(--accent-soft) 0%, white 100%); border-bottom: 1px solid var(--border); }
+  .side-top .course-tag { display: inline-block; background: var(--accent); color: white; font-size: 11px; padding: 3px 9px; border-radius: 12px; font-weight: 500; }
+  .side-top .name { font-size: 19px; font-weight: 600; margin: 8px 0 4px; color: var(--text); }
+  .side-top .pos { font-size: 12px; color: var(--muted); }
+
+  /* Submission metadata box */
+  .submission-info { padding: 10px 18px; background: var(--muted-soft); border-bottom: 1px solid var(--border); font-size: 12px; }
+  .submission-info .label { color: var(--muted); display: inline-block; min-width: 80px; }
+  .submission-info .val { color: var(--text); }
+  .submission-info .late { color: var(--rose); font-weight: 500; }
+  .student-note { background: var(--teal-soft); border-right: 3px solid var(--teal); padding: 8px 10px; margin-top: 8px; border-radius: 4px; font-size: 12px; color: #134e4a; }
+  .student-note .lbl { font-weight: 500; color: var(--teal); font-size: 11px; display: block; margin-bottom: 2px; }
+
+  /* Grade input block */
+  .grade-block { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .grade-block label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 5px; font-weight: 500; }
+  #grade-input { width: 100%; padding: 12px 14px; font-size: 22px; font-weight: 600; border: 2px solid var(--border-strong); border-radius: 10px; color: var(--accent-deep); background: white; transition: 0.15s; }
+  #grade-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  #grade-meta { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  #notes-input { width: 100%; padding: 10px 12px; font: inherit; font-size: 13px; border: 1px solid var(--border-strong); border-radius: 8px; min-height: 110px; resize: vertical; background: white; }
+  #notes-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .nav { display: flex; gap: 6px; padding: 12px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .nav button { flex: 1; padding: 9px 8px; border-radius: 8px; border: 1px solid var(--border-strong); background: white; font-size: 13px; transition: 0.1s; }
+  .nav button:hover { background: var(--muted-soft); }
+  .nav button.primary { background: var(--accent); color: white; border-color: var(--accent); flex: 2; font-weight: 500; }
+  .nav button.primary:hover { background: var(--accent-deep); }
+  .nav button.small { flex: 0 0 auto; padding: 9px 10px; }
+
+  /* Student list */
+  #list { flex: 1; overflow-y: auto; }
+  .student-item { padding: 10px 18px; border-bottom: 1px solid var(--muted-soft); cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.1s; }
+  .student-item:hover { background: var(--muted-soft); }
+  .student-item.active { background: var(--accent-soft); border-right: 3px solid var(--accent); }
+  .student-item .nm { font-size: 13px; }
+  .student-item .badge { font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 500; }
+  .badge.pending { background: var(--amber-soft); color: var(--amber); }
+  .badge.graded { background: var(--teal-soft); color: var(--teal); }
+  .badge.skipped { background: var(--rose-soft); color: var(--rose); }
+  .badge.no_submission { background: #f3f3f5; color: #6b6486; border: 1px solid #d6d2e3; }
+  .kbd-hint { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
+  .kbd-hint kbd { background: white; border: 1px solid var(--border-strong); border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 11px; color: var(--accent-deep); }
+  .student-item .has-note-dot { display: inline-block; width: 8px; height: 8px; background: var(--teal); border-radius: 50%; margin-left: 6px; }
+
+  .footer { padding: 10px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; justify-content: space-between; background: linear-gradient(135deg, var(--muted-soft) 0%, white 100%); }
+  #save-indicator { font-size: 11px; color: var(--muted); }
+  .save-flash { color: var(--teal) !important; font-weight: 600; }
+  #export-btn { background: var(--teal); color: white; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; }
+  #export-btn:hover { background: #0f766e; }
+  #push-btn { background: #4f46e5; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  #push-btn:hover { background: #4338ca; }
+  #reset-btn { background: none; border: none; color: var(--muted); font-size: 11px; text-decoration: underline; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="setup">
+  <h1>📝 Moodle Grader</h1>
+  <p class="sub">בחר תיקייה אחת שמכילה את הקבצים מהמודל — ה-PDFים וגליון הציונים — והכל ייטען אוטומטית.</p>
+
+  <div id="resume-banner" class="resume" style="display:none;">
+    <strong>נמצאה ישיבה שמורה</strong> מתאריך <span id="resume-date"></span>
+    (<span id="resume-graded"></span> מתוך <span id="resume-count"></span> נבדקו).
+    <div style="margin-top:10px; display: flex; gap: 8px;">
+      <button class="pick-folder-btn" id="resume-yes" style="padding: 8px 16px; font-size: 14px;">המשך לבדוק</button>
+      <button class="ghost" id="resume-no">התחל מחדש</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>קורס:</label>
+    <select id="course-select">
+      <option value="physics_a">פיסיקה א' (0455181799)</option>
+      <option value="math_tools">כלים מתמטיים לפיזיקה (0509111710)</option>
+      <option value="custom">אחר</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>שם המטלה:</label>
+    <input type="text" id="assignment-name" placeholder="תרגיל 9">
+  </div>
+  <div class="row">
+    <label>שיטת ציון:</label>
+    <select id="grading-scheme">
+      <option value="numeric">מספרי (0–max)</option>
+      <option value="binary_0_100">בינארי: 0 או 100</option>
+      <option value="pass_fail">עבר / לא עבר</option>
+    </select>
+  </div>
+  <div class="row" id="max-grade-row">
+    <label>ציון מקסימלי:</label>
+    <input type="number" id="max-grade" value="100" min="0" max="1000" step="0.5">
+    <span style="font-size:11px; color: var(--muted);">נשמר לקורס</span>
+  </div>
+
+  <div style="text-align: center; margin-top: 20px;">
+    <button class="pick-folder-btn" id="pick-folder-btn">📁 בחר תיקייה ובדוק</button>
+    <p style="font-size: 12px; color: var(--muted); margin-top: 10px;">בחר תיקייה שמכילה גם את ה-PDFים וגם את גליון הציונים (CSV)</p>
+  </div>
+
+  <div id="folder-info" class="info-card" style="display: none;">
+    <strong>תיקייה נבחרה ✓</strong>
+    <div class="files" id="folder-files"></div>
+    <button class="pick-folder-btn" id="start-btn" style="margin-top: 12px; padding: 10px 20px; font-size: 14px;">התחל לבדוק ▶</button>
+  </div>
+
+  <div class="divider-or">או — דרך ישנה (גרירת קבצים)</div>
+
+  <div class="drop" id="drop-pdfs">
+    <label>
+      📄 <strong>גרור תיקייה של PDF</strong>
+      <input type="file" id="pdf-input" webkitdirectory directory multiple accept="application/pdf">
+    </label>
+    <div class="status" id="pdf-status">לא נטענו</div>
+  </div>
+
+  <div class="drop" id="drop-csv">
+    <label>
+      📋 <strong>גרור גליון ציונים (.csv)</strong>
+      <input type="file" id="csv-input" accept=".csv">
+    </label>
+    <div class="status" id="csv-status">לא נטען</div>
+  </div>
+
+  <button class="ghost" id="start-manual-btn" disabled style="width: 100%; padding: 10px;">התחל (דרך ידנית)</button>
+</div>
+
+<!-- GRADER SCREEN -->
+<div id="grader">
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+
+  <div id="side">
+    <div class="side-top">
+      <span class="course-tag" id="course-tag">קורס</span>
+      <div id="section-banner" style="display:none; margin-top:8px; padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600;"></div>
+      <div class="name" id="header-name">—</div>
+      <div class="pos" id="header-pos">—</div>
+    </div>
+
+    <div class="submission-info" id="submission-info">
+      <div><span class="label">📅 הוגש:</span> <span class="val" id="submit-date">—</span></div>
+      <div id="student-note-box"></div>
+    </div>
+
+    <div class="grade-block">
+      <label>🎯 ציון</label>
+      <!-- Quick-grade buttons (visible for binary or pass/fail schemes) -->
+      <div id="quick-grade" style="display:none; gap:8px; margin-bottom:8px;">
+        <button id="qg-pos" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#dcfce7; color:#166534; border:2px solid #86efac; border-radius:8px; cursor:pointer;"></button>
+        <button id="qg-neg" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#fee2e2; color:#991b1b; border:2px solid #fca5a5; border-radius:8px; cursor:pointer;"></button>
+      </div>
+      <input type="text" id="grade-input" inputmode="decimal" style="text-align:center;">
+      <div id="grade-meta"></div>
+      <div id="kbd-hint" class="kbd-hint"></div>
+    </div>
+
+    <div class="grade-block">
+      <label>✏️ הערות שלך</label>
+      <textarea id="notes-input" placeholder="הערות לסטודנט..."></textarea>
+    </div>
+
+    <div class="nav">
+      <button class="small" id="back-to-setup-btn" title="חזרה להגדרות">↩</button>
+      <button id="prev-btn">◀</button>
+      <button id="skip-btn">דלג</button>
+      <button class="primary" id="next-btn">שמור והבא ▶</button>
+    </div>
+
+    <div id="list"></div>
+
+    <div class="footer">
+      <span id="save-indicator">נשמר ✓</span>
+      <button id="reset-btn">איפוס מלא</button>
+      <button id="export-btn">ייצוא CSV ⬇</button>
+      <button id="push-btn">📤 ייצוא ל-Moodle</button>
+    </div>
+  </div>
+
+  <div id="pdf-area">
+    <div id="pdf-tabs">
+      <button id="tab-student" class="active" data-view="student" title="הגשת הסטודנט (S)"><kbd>S</kbd>📄 תלמיד</button>
+      <button id="tab-questions" data-view="questions" title="דף השאלות (Q)"><kbd>Q</kbd>📋 שאלות</button>
+      <button id="tab-solution" data-view="solution" title="פתרון מלא (A)"><kbd>A</kbd>✅ פתרון</button>
+      <span style="flex:1;"></span>
+      <button id="win-solution" title="פתח פתרון בחלון נפרד (W)" style="display:none;"><kbd>W</kbd>🪟 פתרון בחלון</button>
+      <button id="win-questions" title="פתח שאלות בחלון נפרד" style="display:none;">🪟 שאלות בחלון</button>
+    </div>
+    <iframe id="pdf-frame"></iframe>
+    <div id="pdf-empty" style="display:none;">לא נמצא PDF לסטודנט זה</div>
+  </div>
+</div>
+
+<!-- Pre-baked data, if the daily task generated it next to this HTML. Silent if missing. -->
+<script src="data.js" onerror="this.remove()"></script>
+
+<script>
+// ============================================================
+// CONFIG / STORAGE KEYS
+// ============================================================
+const STATE_KEY  = "moodleGraderState_v2";
+const PREFS_KEY  = "moodleGraderPrefs_v2";
+const IDB_NAME   = "moodleGraderDB";
+const IDB_STORE  = "handles";
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  course: "physics_a",
+  assignmentName: "",
+  maxGrade: 100,
+  csvHeader: [],
+  cols: {},          // {name, identifier, grade, feedback, submitDate, onlineText, status}
+  csvAllRows: [],    // array of objects keyed by header
+  students: [],      // {name, csvRowIdx, pdfFile, grade, notes, status, submitDate, onlineText}
+  currentIdx: 0,
+  savedAt: null,
+};
+let pdfFiles = [];   // current set of File objects (PDFs)
+let pickedCsv = null;
+let folderHandle = null;
+const pdfObjUrls = {};
+
+// ============================================================
+// INDEXEDDB — persist FSA folder handle
+// ============================================================
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function idbPut(key, val) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// ============================================================
+// PREFS (max grade per course)
+// ============================================================
+function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; } }
+function savePrefs(p) { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); }
+const DEFAULT_SCHEMES = {
+  physics_a:  { scheme: 'pass_fail',     maxGrade: 100 },
+  math_tools: { scheme: 'binary_0_100',  maxGrade: 100 },
+  custom:     { scheme: 'numeric',       maxGrade: 100 },
+};
+function applyCoursePreset() {
+  const sel = document.getElementById('course-select');
+  const schemeSel = document.getElementById('grading-scheme');
+  const prefs = loadPrefs();
+  const saved = prefs[sel.value];
+  const defaults = DEFAULT_SCHEMES[sel.value] || DEFAULT_SCHEMES.custom;
+  const scheme = (saved && saved.scheme) || defaults.scheme;
+  const maxGrade = (saved && saved.maxGrade) || defaults.maxGrade;
+  if (schemeSel) schemeSel.value = scheme;
+  document.getElementById('max-grade').value = maxGrade;
+  updateMaxGradeVisibility();
+}
+function rememberCoursePreset() {
+  const sel = document.getElementById('course-select');
+  const schemeSel = document.getElementById('grading-scheme');
+  const max = parseFloat(document.getElementById('max-grade').value);
+  if (!sel.value) return;
+  const prefs = loadPrefs();
+  prefs[sel.value] = { scheme: schemeSel.value, maxGrade: max || 100 };
+  savePrefs(prefs);
+}
+function updateMaxGradeVisibility() {
+  const schemeSel = document.getElementById('grading-scheme');
+  const maxRow = document.getElementById('max-grade-row');
+  if (!schemeSel || !maxRow) return;
+  // Only show max-grade row for numeric scheme
+  maxRow.style.display = (schemeSel.value === 'numeric') ? 'flex' : 'none';
+}
+// ===== Grade UI rendering by scheme =====
+function setupGradeUI(scheme, maxGrade) {
+  const qg = document.getElementById('quick-grade');
+  const qgPos = document.getElementById('qg-pos');
+  const qgNeg = document.getElementById('qg-neg');
+  const meta = document.getElementById('grade-meta');
+  const hint = document.getElementById('kbd-hint');
+  const input = document.getElementById('grade-input');
+  if (!qg) return;
+  const markInteracted = () => { const s = state.students[state.currentIdx]; if (s) s._interacted = true; };
+  if (scheme === 'binary_0_100') {
+    qg.style.display = 'flex';
+    qgPos.textContent = '✓ 100';
+    qgNeg.textContent = '✗ 0';
+    qgPos.onclick = () => { markInteracted(); input.value = '100'; input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
+    qgNeg.onclick = () => { markInteracted(); input.value = '0';   input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
+    meta.textContent = 'בינארי — 0 או 100';
+    if (hint) hint.innerHTML = '<kbd>1</kbd> = 100 · <kbd>0</kbd> = 0 · <kbd>Enter</kbd> = הבא · <kbd>←</kbd>/<kbd>→</kbd> = ניווט';
+  } else if (scheme === 'pass_fail') {
+    qg.style.display = 'flex';
+    qgPos.textContent = '✓ עובר';
+    qgNeg.textContent = '✗ לא עובר';
+    qgPos.onclick = () => { markInteracted(); input.value = 'עובר';     input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
+    qgNeg.onclick = () => { markInteracted(); input.value = 'לא עובר'; input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
+    meta.textContent = 'עובר / לא עובר';
+    if (hint) hint.innerHTML = '<kbd>P</kbd>/<kbd>1</kbd> = עובר · <kbd>F</kbd>/<kbd>0</kbd> = לא עובר · <kbd>Enter</kbd> = הבא';
+  } else {
+    qg.style.display = 'none';
+    meta.innerHTML = 'מתוך <span id="max-display">' + (maxGrade || 100) + '</span>';
+    if (hint) hint.innerHTML = 'הקלידי ציון · <kbd>Enter</kbd> = שמור והבא';
+  }
+}
+
+// ============================================================
+// FILE SYSTEM ACCESS API — pick a folder, persist handle
+// ============================================================
+async function pickFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('הדפדפן שלך לא תומך בבחירת תיקייה אוטומטית. תשתמשי בגרירת הקבצים הידנית למטה.');
+    return;
+  }
+  try {
+    folderHandle = await window.showDirectoryPicker({ id: 'moodle-grader', mode: 'read' });
+    await idbPut('folderHandle', folderHandle);
+    await loadFromFolder();
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error(e);
+  }
+}
+
+async function verifyPermission(handle) {
+  const opts = { mode: 'read' };
+  if (await handle.queryPermission(opts) === 'granted') return true;
+  if (await handle.requestPermission(opts) === 'granted') return true;
+  return false;
+}
+
+async function loadFromFolder() {
+  if (!folderHandle) return;
+  const ok = await verifyPermission(folderHandle);
+  if (!ok) { alert('צריך לאשר גישה לתיקייה.'); return; }
+
+  pdfFiles = [];
+  let foundCsv = null;
+  for await (const [name, handle] of folderHandle.entries()) {
+    if (handle.kind !== 'file') continue;
+    if (name.toLowerCase().endsWith('.pdf')) {
+      pdfFiles.push(await handle.getFile());
+    } else if (name.toLowerCase().endsWith('.csv')) {
+      // Prefer one that has "grading" or "worksheet" in its name
+      if (!foundCsv || /grading|worksheet|ציונ|גליון/i.test(name)) foundCsv = await handle.getFile();
+    }
+  }
+  pickedCsv = foundCsv;
+
+  const info = document.getElementById('folder-info');
+  const filesEl = document.getElementById('folder-files');
+  if (pdfFiles.length || pickedCsv) {
+    info.style.display = 'block';
+    filesEl.innerHTML =
+      `📄 ${pdfFiles.length} קבצי PDF<br>` +
+      (pickedCsv ? `📋 ${pickedCsv.name}` : '<span style="color: var(--rose);">⚠ לא נמצא CSV — תשימי גם את גליון הציונים בתיקייה</span>');
+    document.getElementById('start-btn').disabled = !(pdfFiles.length && pickedCsv);
+  }
+}
+
+// ============================================================
+// SETUP — drag/drop fallback
+// ============================================================
+function bindDrop(zone, isDir) {
+  ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('hover'); }));
+  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('hover'); }));
+  zone.addEventListener('drop', async e => {
+    const items = e.dataTransfer.items, files = [];
+    if (items && items.length && items[0].webkitGetAsEntry) {
+      for (const it of Array.from(items)) {
+        const ent = it.webkitGetAsEntry(); if (ent) await walkEntry(ent, files);
+      }
+    } else Array.from(e.dataTransfer.files).forEach(f => files.push(f));
+    if (isDir) { pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf')); updateManualStatus(); }
+    else { const c = files.find(f => f.name.toLowerCase().endsWith('.csv')); if (c) { pickedCsv = c; updateManualStatus(); } }
+  });
+}
+async function walkEntry(entry, out) {
+  if (entry.isFile) { const f = await new Promise(r => entry.file(r)); out.push(f); }
+  else if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const ents = await new Promise(r => reader.readEntries(r));
+    for (const e of ents) await walkEntry(e, out);
+  }
+}
+function updateManualStatus() {
+  document.getElementById('pdf-status').textContent = pdfFiles.length ? `${pdfFiles.length} PDF נטענו` : 'לא נטענו';
+  document.getElementById('csv-status').textContent = pickedCsv ? pickedCsv.name : 'לא נטען';
+  document.getElementById('start-manual-btn').disabled = !(pdfFiles.length && pickedCsv);
+}
+
+// ============================================================
+// CSV
+// ============================================================
+function parseCSV(text) {
+  const rows = []; let row = [], field = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (q) {
+      if (c === '"' && n === '"') { field += '"'; i++; }
+      else if (c === '"') q = false;
+      else field += c;
+    } else {
+      if (c === '"') q = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\r' && n === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; }
+      else if (c === '\n' || c === '\r') { row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  // Strip BOM from first cell
+  if (rows[0] && rows[0][0]) rows[0][0] = rows[0][0].replace(/^﻿/, '');
+  return rows.filter(r => r.length && !(r.length === 1 && r[0] === ''));
+}
+function writeCSV(rows) {
+  return rows.map(r => r.map(c => {
+    if (c == null) c = ''; c = String(c);
+    if (/[",\n\r]/.test(c)) return '"' + c.replace(/"/g, '""') + '"';
+    return c;
+  }).join(',')).join('\r\n');
+}
+function findCol(header, candidates) {
+  const lower = header.map(h => (h || '').trim().toLowerCase());
+  for (const cand of candidates) {
+    const idx = lower.findIndex(h => h.includes(cand.toLowerCase()));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+// ============================================================
+// MATCHING
+// ============================================================
+function normalizeName(s) { return (s || '').toLowerCase().replace(/[\s‎‏⁨⁩]/g, '').replace(/[_\-.]/g, ''); }
+
+function matchPdfsToStudents(studentNames) {
+  const out = {};
+  const norm = pdfFiles.map(f => ({
+    file: f, norm: normalizeName(f.name.replace(/\.pdf$/i, '').replace(/_(tirgul|tools|hw)\d+/i, ''))
+  }));
+  studentNames.forEach((name, idx) => {
+    const t = normalizeName(name);
+    let m = norm.find(n => n.norm === t);
+    if (!m) m = norm.find(n => n.norm.includes(t) || t.includes(n.norm));
+    if (m) out[idx] = m.file;
+  });
+  return out;
+}
+
+// ============================================================
+// START
+// ============================================================
+async function startGrading() {
+  if (!pickedCsv) { alert('חסר קובץ CSV'); return; }
+  const csvText = await pickedCsv.text();
+  const rows = parseCSV(csvText);
+  if (!rows.length) { alert('CSV ריק'); return; }
+
+  const header = rows[0];
+  state.csvHeader = header;
+  state.csvAllRows = rows.slice(1).map(r => {
+    const o = {}; header.forEach((h, i) => o[h] = r[i] || ''); return o;
+  });
+  state.cols = {
+    identifier:  findCol(header, ['identifier', 'מזהה']),
+    name:        findCol(header, ['full name', 'שם מלא', 'name', 'שם']),
+    grade:       findCol(header, ['grade', 'ציונים']),
+    feedback:    findCol(header, ['feedback', 'הערות', 'comment']),
+    submitDate:  findCol(header, ['last modified (submission)', 'submitted', 'הגשה', 'last modified']),
+    onlineText:  findCol(header, ['online text', 'on-line text', 'טקסט מקוון', 'תוכן מקוון']),
+    status:      findCol(header, ['status', 'מצב']),
+  };
+  if (state.cols.name === -1) {
+    alert('לא נמצאה עמודת שם ב-CSV. ודאי שזה גליון ציונים מ-Moodle.');
+    return;
+  }
+
+  state.course = document.getElementById('course-select').value;
+  state.maxGrade = parseFloat(document.getElementById('max-grade').value) || 100;
+  state.gradingScheme = document.getElementById('grading-scheme').value;
+  state.assignmentName = document.getElementById('assignment-name').value || pickedCsv.name.replace(/\.csv$/i, '');
+
+  const names = state.csvAllRows.map(r => r[header[state.cols.name]] || '');
+  const matched = matchPdfsToStudents(names);
+
+  const prevByName = {};
+  if (state.students && state.students.length) state.students.forEach(s => { prevByName[s.name] = s; });
+
+  state.students = state.csvAllRows.map((row, idx) => {
+    const name = names[idx];
+    const prev = prevByName[name];
+    const file = matched[idx];
+    return {
+      name,
+      csvRowIdx: idx,
+      pdfFileName: file ? file.name : null,
+      grade: prev ? prev.grade : (state.cols.grade >= 0 && row[header[state.cols.grade]] && row[header[state.cols.grade]] !== '-' ? row[header[state.cols.grade]] : ''),
+      notes: prev ? prev.notes : (state.cols.feedback >= 0 ? (row[header[state.cols.feedback]] || '') : ''),
+      status: prev ? prev.status : 'pending',
+      submitDate: state.cols.submitDate >= 0 ? row[header[state.cols.submitDate]] : '',
+      onlineText: state.cols.onlineText >= 0 ? row[header[state.cols.onlineText]] : '',
+    };
+  });
+
+  state.currentIdx = 0;
+  saveState();
+  showGrader();
+}
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+// Embedded graders all live on file:// and share one localStorage, so each
+// course+assignment gets its own key — otherwise opening a second grader
+// overwrites (or inherits) the first one's grades.
+function stateKey() {
+  const d = window.__EMBEDDED_DATA;
+  return d ? STATE_KEY + '::' + (d.course || '') + '::' + (d.assignmentName || '') : STATE_KEY;
+}
+function clearStoredState() {
+  localStorage.removeItem(stateKey());
+  const d = window.__EMBEDDED_DATA;
+  if (d) { // also drop a matching pre-v3 save so it isn't re-adopted
+    try { const o = JSON.parse(localStorage.getItem(STATE_KEY));
+      if (o && o.course === d.course && o.assignmentName === d.assignmentName) localStorage.removeItem(STATE_KEY); } catch {}
+  }
+}
+function saveState() {
+  const snap = {
+    course: state.course, assignmentName: state.assignmentName, maxGrade: state.maxGrade,
+    gradingScheme: state.gradingScheme,
+    csvHeader: state.csvHeader, cols: state.cols, csvAllRows: state.csvAllRows,
+    students: state.students.map(s => ({ ...s })),
+    currentIdx: state.currentIdx,
+    savedAt: new Date().toISOString(),
+  };
+  try { localStorage.setItem(stateKey(), JSON.stringify(snap)); state.savedAt = snap.savedAt; flashSaved(); }
+  catch (e) { console.warn('save failed', e); }
+}
+function flashSaved() {
+  const el = document.getElementById('save-indicator');
+  if (!el) return;
+  el.textContent = 'נשמר ✓'; el.classList.add('save-flash');
+  setTimeout(() => el.classList.remove('save-flash'), 700);
+}
+function loadStoredState() {
+  try {
+    const own = JSON.parse(localStorage.getItem(stateKey()));
+    const d = window.__EMBEDDED_DATA;
+    if (own || !d) return own;
+    // Migrate a save made before per-assignment keys existed, only if it is this exact assignment.
+    const old = JSON.parse(localStorage.getItem(STATE_KEY));
+    return (old && old.course === d.course && old.assignmentName === d.assignmentName) ? old : null;
+  } catch { return null; }
+}
+
+// ============================================================
+// GRADER UI
+// ============================================================
+function showGrader() {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('grader').style.display = 'flex';
+  const sch = state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme;
+  setupGradeUI(sch, state.maxGrade);
+  document.getElementById('course-tag').textContent =
+    state.course === 'physics_a' ? 'פיסיקה א\' · ' + state.assignmentName :
+    state.course === 'math_tools' ? 'כלים מתמטיים · ' + state.assignmentName :
+    state.assignmentName;
+  renderList();
+  showStudent(state.currentIdx);
+}
+
+function renderList() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  state.students.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'student-item' + (i === state.currentIdx ? ' active' : '');
+    const badgeText = s.status === 'graded' ? '✓ נבדק' : s.status === 'skipped' ? 'דולג' : s.status === 'no_submission' ? '∅ ללא הגשה' : s.status === 'extension' ? '⏳ הארכה' : 'ממתין';
+    const hasNote = (s.onlineText && s.onlineText.trim()) ? '<span class="has-note-dot" title="יש הערה מהסטודנט"></span>' : '';
+    el.innerHTML = `<span class="nm">${i+1}. ${String(s.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')}${hasNote}</span><span class="badge ${s.status}">${badgeText}</span>`;
+    el.onclick = () => { saveCurrent(); showStudent(i); };
+    list.appendChild(el);
+  });
+  const graded = state.students.filter(x => x.status === 'graded' || x.status === 'no_submission' || x.status === 'extension').length;
+  document.getElementById('progress-fill').style.width = (graded / state.students.length * 100) + '%';
+}
+
+function showStudent(idx) {
+  state.currentIdx = idx;
+  const s = state.students[idx];
+  if (!s) return;
+  s._interacted = false;
+  // Drop focus from any button so stray Space/Enter doesn't re-trigger it
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  document.getElementById('header-name').textContent = s.name;
+  document.getElementById('header-pos').textContent = `${idx+1} מתוך ${state.students.length}`;
+  document.getElementById('grade-input').value = s.grade || '';
+  document.getElementById('notes-input').value = s.notes || '';
+  document.getElementById('submit-date').textContent = s.submitDate || '—';
+
+  // Student's own note
+  const noteBox = document.getElementById('student-note-box');
+  if (s.onlineText && s.onlineText.trim()) {
+    noteBox.innerHTML = `<div class="student-note"><span class="lbl">💬 הערת הסטודנט</span>${s.onlineText.replace(/</g,'&lt;')}</div>`;
+  } else noteBox.innerHTML = '';
+
+  // PDF — find file by name in current pdfFiles
+  const iframe = document.getElementById('pdf-frame');
+  const empty = document.getElementById('pdf-empty');
+  const file = pdfFiles.find(f => f.name === s.pdfFileName);
+  if (file) {
+    if (!pdfObjUrls[idx]) pdfObjUrls[idx] = URL.createObjectURL(file);
+    // #view=FitH gives continuous fit-to-width; scrollbar visible by default in Chrome PDF viewer
+    iframe.src = pdfObjUrls[idx] + '#view=FitH&toolbar=1&navpanes=0';
+    iframe.style.display = 'block'; empty.style.display = 'none';
+  } else {
+    iframe.style.display = 'none'; empty.style.display = 'block';
+    iframe.src = 'about:blank';
+  }
+  renderList();
+}
+
+function saveCurrent() {
+  const s = state.students[state.currentIdx]; if (!s) return;
+  // Only persist grade/notes/status if the user actually interacted with this student.
+  // (Prevents auto-marking 'graded' just from navigating over a file.)
+  if (!s._interacted) { saveState(); renderList(); return; }
+  s.grade = document.getElementById('grade-input').value;
+  s.notes = document.getElementById('notes-input').value;
+  if (s.grade !== '' || s.notes !== '') {
+    if (s.status !== 'skipped') s.status = 'graded';
+  }
+  saveState(); renderList();
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportCSV() {
+  saveCurrent();
+  const rows = [state.csvHeader.slice()];
+  state.csvAllRows.forEach((origRow, idx) => {
+    const newRow = state.csvHeader.map(h => origRow[h] || '');
+    const student = state.students.find(s => s.csvRowIdx === idx);
+    if (student && (student.status === 'graded' || student.status === 'no_submission')) {
+      // extension students are deliberately skipped — leave their row untouched
+      if (state.cols.grade >= 0 && student.grade !== '') newRow[state.cols.grade] = student.grade;
+      if (state.cols.feedback >= 0) newRow[state.cols.feedback] = student.notes || '';
+    }
+    rows.push(newRow);
+  });
+  const out = '﻿' + writeCSV(rows);
+  const blob = new Blob([out], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(state.assignmentName || 'grades').replace(/[\\/:*?"<>|]/g, '_')}_grades.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Export a compact JSON payload for the "Moodle Push" bookmarklet.
+// Copies to clipboard AND downloads moodle_push.json.
+function exportMoodlePush() {
+  saveCurrent();
+  const scheme = state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme;
+  const students = [];
+  state.students.forEach(s => {
+    const note = s.notes || '';
+    if (scheme === 'pass_fail') {
+      let verdict = null;
+      if (s.grade === 'עובר') verdict = 'pass';
+      else if (s.grade === 'לא עובר' || s.grade === 'לא עבר' || s.status === 'no_submission') verdict = 'fail';
+      if (s.status === 'extension' && !s.grade) return; // extension -> not yet due, skip
+      if (!verdict) return; // ungraded -> skip
+      students.push({ name: s.name, verdict, note });
+    } else {
+      if (s.status === 'extension' && !s.grade) return; // extension -> not yet due, skip
+      if (s.grade === '' || s.grade == null) return;
+      const num = parseFloat(s.grade);
+      if (isNaN(num)) return;
+      students.push({ name: s.name, grade: num, note });
+    }
+  });
+  const payload = { assignment: state.assignmentName || '', scheme, students };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'moodle_push.json';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const done = () => alert('📤 הועתק! ' + students.length + ' סטודנטים.\n\nב-Moodle: סמני «מתן ציון מהיר» ← לחצי על הסימנייה 📤 Moodle Push ← «שמור עמוד».');
+  const flat = JSON.stringify(payload);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(flat).then(done).catch(done);
+  } else { done(); }
+}
+
+// ============================================================
+// EVENT WIRING
+// ============================================================
+// ============================================================
+// EMBEDDED MODE — when the daily task pre-baked the data
+// ============================================================
+async function initFromEmbedded(data) {
+  // data is { course, assignmentName, maxGrade, gradingScheme?, csvHeader, cols, csvAllRows, students:[...] }
+  state.course = data.course;
+  state.assignmentName = data.assignmentName;
+  state.maxGrade = data.maxGrade;
+  state.gradingScheme = data.gradingScheme || (DEFAULT_SCHEMES[data.course] || DEFAULT_SCHEMES.custom).scheme;
+  state.csvHeader = data.csvHeader;
+  state.cols = data.cols;
+  state.csvAllRows = data.csvAllRows;
+  // Merge with any previously saved grades/notes (same assignment key)
+  const stored = loadStoredState();
+  const prevByName = {};
+  if (stored && stored.assignmentName === data.assignmentName && stored.students) {
+    stored.students.forEach(s => { prevByName[s.name] = s; });
+  }
+  // Auto-mark students with no PDF as 'no_submission' with grade 0 (or "לא עבר" for pass_fail)
+  const sch = state.gradingScheme;
+  const noPdfGrade = (sch === 'pass_fail') ? 'לא עובר' : '0';
+  state.students = data.students.map((s, idx) => {
+    const prev = prevByName[s.name];
+    const hasPdf = !!s.pdfFile;
+    // An approved extension means the deadline hasn't passed for them — leave blank, never auto-fail.
+    if (!hasPdf && s.hasExtension) {
+      const p = prev && (prev.grade || prev.notes) ? prev : null;
+      return {
+        name: s.name, csvRowIdx: idx, pdfFileName: null,
+        grade: p ? p.grade : '', notes: p ? p.notes : '',
+        status: p ? p.status : 'extension',
+        submitDate: s.submitDate || '', onlineText: s.onlineText || '',
+        hasExtension: true, extensionNote: s.extensionNote || '',
+      };
+    }
+    // 'no_submission' is auto-derived (its grade is auto-filled too), so it is NOT a
+    // real user edit — re-evaluate it against the current PDFs (e.g. after re-linking).
+    const prevRealEdit = prev && prev.status !== 'pending' && prev.status !== 'no_submission';
+    const prevTouched = prevRealEdit || (prev && prev.status === 'pending' && (prev.grade || prev.notes));
+    // Submitted something that isn't a PDF (image, docx...) — that is NOT a non-submission.
+    const submittedOther = !hasPdf && !!s.submitted;
+    let grade, notes, status;
+    if (prevTouched) {
+      grade = prev.grade; notes = prev.notes; status = prev.status;
+    } else if (submittedOther) {
+      grade = s.gradeFromCsv || ''; notes = (prev ? prev.notes : '') || (s.feedbackFromCsv || '');
+      status = 'pending';
+    } else if (!hasPdf) {
+      grade = noPdfGrade; notes = (prev ? prev.notes : '') || (s.feedbackFromCsv || '');
+      status = 'no_submission';
+    } else {
+      const carry = prev && prev.status !== 'no_submission';
+      grade = carry ? prev.grade : (s.gradeFromCsv || '');
+      notes = (carry && prev.notes) ? prev.notes : (s.feedbackFromCsv || '');
+      status = 'pending';
+    }
+    return {
+      name: s.name,
+      csvRowIdx: idx,
+      pdfFileName: s.pdfFile,
+      pdfFiles: s.pdfFiles || (s.pdfFile ? [s.pdfFile] : []),
+      otherFiles: s.otherFiles || [], submittedOther,
+      grade, notes, status,
+      submitDate: s.submitDate || '',
+      onlineText: s.onlineText || '',
+    };
+  });
+  // Open on someone who actually has a PDF. Landing on a non-submitter shows an
+  // empty viewer and looks broken; only honour a stored position if it's real progress.
+  let start = stored && stored.assignmentName === data.assignmentName ? (stored.currentIdx || 0) : 0;
+  const cur = state.students[start];
+  if (!cur || cur.status === 'no_submission' || cur.status === 'graded' || cur.status === 'extension') {
+    const firstOpen = state.students.findIndex(s => s.status !== 'no_submission' && s.status !== 'graded' && s.status !== 'extension');
+    if (firstOpen >= 0) start = firstOpen;
+  }
+  state.currentIdx = start;
+  saveState();
+  showGraderEmbedded();
+}
+
+function showGraderEmbedded() {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('grader').style.display = 'flex';
+  // Set up grade UI based on scheme (default to course's default)
+  const sch = state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme;
+  setupGradeUI(sch, state.maxGrade);
+  document.getElementById('course-tag').textContent =
+    state.course === 'physics_a' ? 'פיסיקה א\' · ' + state.assignmentName :
+    state.course === 'math_tools' ? 'כלים מתמטיים · ' + state.assignmentName :
+    state.assignmentName;
+  renderSectionBanner();
+  renderList();
+  showStudentEmbedded(state.currentIdx);
+}
+
+// ============================================================
+// SEPARATE-WINDOW AUX VIEWER (solution / exercise side-by-side)
+// ============================================================
+const __auxWindows = {}; // {solution: Window, questions: Window}
+function auxUrl(which) {
+  const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
+  const fname = aux[which];
+  if (!fname) return null;
+  return './' + fname + '#view=FitH&toolbar=1';
+}
+function openAuxWindow(which) {
+  const url = auxUrl(which);
+  if (!url) return false;
+  const existing = __auxWindows[which];
+  if (existing && !existing.closed) { existing.focus(); return true; }
+  // Open docked to the screen edge so it sits next to the grader
+  const w = Math.floor(screen.availWidth * 0.42);
+  const h = screen.availHeight;
+  const feats = `width=${w},height=${h},left=0,top=0`;
+  const win = window.open(url, 'moodle_aux_' + which, feats);
+  if (win) { __auxWindows[which] = win; win.focus(); return true; }
+  return false; // popup blocked
+}
+// Auto-open the solution window once, on the first user gesture (popup blockers
+// require a gesture; opening on bare load gets blocked).
+let __autoOpenedAux = false;
+function autoOpenSolutionOnce() {
+  if (__autoOpenedAux) return;
+  const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
+  if (!(aux.solution || aux.questions)) { __autoOpenedAux = true; return; }
+  const which = aux.solution ? 'solution' : 'questions';
+  if (openAuxWindow(which)) __autoOpenedAux = true;
+}
+
+// ============================================================
+// SECTION BANNER (Physics groups 3–4 safety)
+// ============================================================
+function renderSectionBanner() {
+  const el = document.getElementById('section-banner');
+  if (!el) return;
+  const d = window.__EMBEDDED_DATA || {};
+  // d.sectionLabel e.g. "קבוצות 3–4" ; d.sectionOk false => mismatch warning
+  if (state.course === 'physics_a') {
+    const label = d.sectionLabel || 'קבוצות 3–4 (לא אומת)';
+    const ok = d.sectionOk !== false && /3.?4/.test(label);
+    el.style.display = 'block';
+    el.style.background = ok ? '#dcfce7' : '#fee2e2';
+    el.style.color = ok ? '#166534' : '#991b1b';
+    el.style.border = '1px solid ' + (ok ? '#86efac' : '#fca5a5');
+    el.textContent = (ok ? '👥 ' : '⚠️ ') + 'פיסיקה א′ · ' + label;
+  } else if (d.sectionLabel) {
+    el.style.display = 'block';
+    el.style.background = 'var(--accent-soft)';
+    el.style.color = 'var(--accent-deep)';
+    el.style.border = '1px solid var(--border-strong)';
+    el.textContent = '👥 ' + d.sectionLabel;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// Current PDF view ('student' | 'questions' | 'solution') — sticky across navigation
+let __pdfView = 'student';
+function applyPdfView(s) {
+  const iframe = document.getElementById('pdf-frame');
+  const empty = document.getElementById('pdf-empty');
+  const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
+  let src = null, missing = false;
+  if (__pdfView === 'questions' && aux.questions) src = './' + aux.questions;
+  else if (__pdfView === 'solution' && aux.solution) src = './' + aux.solution;
+  else if (s && s.pdfFileName) src = (s.pdfFiles && s.pdfFiles[s._fileIdx || 0]) || s.pdfFileName;
+  else missing = true;
+  if (src) {
+    iframe.src = src + '#view=FitH&toolbar=1&navpanes=0';
+    iframe.style.display = 'block'; empty.style.display = 'none';
+  } else {
+    iframe.src = 'about:blank';
+    iframe.style.display = 'none'; empty.style.display = 'block';
+    empty.textContent = __pdfView === 'questions' ? 'אין דף שאלות לתרגיל זה' :
+                        __pdfView === 'solution' ? 'אין פתרון לתרגיל זה' :
+                        (s && s.submittedOther) ? 'הסטודנט הגיש קובץ שאינו PDF' + ((s.otherFiles || []).length ? ': ' + s.otherFiles.join(', ') : '') + ' — לבדוק ב-Moodle. לא סומן אוטומטית כלא-הגשה.' :
+                        'לא נמצא PDF לסטודנט זה';
+  }
+  // Sync tab button active state
+  document.querySelectorAll('#pdf-tabs button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === __pdfView);
+  });
+}
+
+function showStudentEmbedded(idx) {
+  state.currentIdx = idx;
+  const s = state.students[idx];
+  if (!s) return;
+  s._interacted = false;
+  // Drop focus from any button so stray Space/Enter doesn't re-trigger it
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  document.getElementById('header-name').textContent = s.name;
+  document.getElementById('header-pos').textContent = `${idx+1} מתוך ${state.students.length}`;
+  document.getElementById('grade-input').value = s.grade || '';
+  document.getElementById('notes-input').value = s.notes || '';
+  document.getElementById('submit-date').textContent = s.submitDate || '—';
+  const noteBox = document.getElementById('student-note-box');
+  if (s.onlineText && s.onlineText.trim()) {
+    noteBox.innerHTML = `<div class="student-note"><span class="lbl">💬 הערת הסטודנט</span>${s.onlineText.replace(/</g,'&lt;')}</div>`;
+  } else noteBox.innerHTML = '';
+  // More than one PDF submitted — let the grader flip between them instead of silently showing only the first.
+  s._fileIdx = 0;
+  if (s.pdfFiles && s.pdfFiles.length > 1) {
+    const bar = document.createElement('div');
+    bar.id = 'file-switch'; bar.style.cssText = 'margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; font-size:12px;';
+    bar.append('📎 ' + s.pdfFiles.length + ' קבצים:');
+    s.pdfFiles.forEach((f, i) => {
+      const b = document.createElement('button');
+      b.textContent = i + 1; b.className = 'small'; b.style.fontWeight = i === 0 ? '700' : '400';
+      b.onclick = () => { s._fileIdx = i; __pdfView = 'student'; applyPdfView(s);
+        bar.querySelectorAll('button').forEach((x, j) => x.style.fontWeight = j === i ? '700' : '400'); b.blur(); };
+      bar.appendChild(b);
+    });
+    noteBox.appendChild(bar);
+  }
+  applyPdfView(s);
+  renderList();
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+function handleShortcut(e) {
+  // Only when grader is visible
+  if (document.getElementById('grader').style.display === 'none') return;
+  // Cmd/Ctrl+Enter always = save & next (works even from inputs)
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    document.getElementById('next-btn').click();
+    return;
+  }
+  // Don't intercept regular keys when user is typing in a text field
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+  const scheme = state.gradingScheme;
+  // Enter (without modifier) = save + next
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('next-btn').click();
+    return;
+  }
+  // RTL nav: left arrow = forward (next), right arrow = back (prev)
+  if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('next-btn').click(); return; }
+  if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('prev-btn').click(); return; }
+  if (e.key === ' ') { e.preventDefault(); document.getElementById('skip-btn').click(); return; }
+
+  // W = open solution (or questions) in a separate window
+  if (e.key.toLowerCase() === 'w') {
+    const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
+    if (aux.solution || aux.questions) {
+      e.preventDefault();
+      __autoOpenedAux = true;
+      openAuxWindow(aux.solution ? 'solution' : 'questions');
+      return;
+    }
+  }
+
+  // PDF view switcher (S = student, Q = questions, A = solution)
+  const k = e.key.toLowerCase();
+  if (k === 's' || k === 'q' || k === 'a') {
+    const view = (k === 'q') ? 'questions' : (k === 'a') ? 'solution' : 'student';
+    const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
+    if (view === 'student' || (view === 'questions' && aux.questions) || (view === 'solution' && aux.solution)) {
+      e.preventDefault();
+      __pdfView = view;
+      applyPdfView(state.students[state.currentIdx]);
+      return;
+    }
+  }
+
+  // Per-scheme quick keys
+  if (scheme === 'binary_0_100') {
+    if (e.key === '1') { e.preventDefault(); document.getElementById('qg-pos').click(); }
+    else if (e.key === '0') { e.preventDefault(); document.getElementById('qg-neg').click(); }
+  } else if (scheme === 'pass_fail') {
+    const k = e.key.toLowerCase();
+    if (k === '1' || k === 'p') { e.preventDefault(); document.getElementById('qg-pos').click(); }
+    else if (k === '0' || k === 'f') { e.preventDefault(); document.getElementById('qg-neg').click(); }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // === Embedded mode shortcut ===
+  if (window.__EMBEDDED_DATA) {
+    // Show questions/solution tabs if available; wire up clicks
+    const aux = window.__EMBEDDED_DATA.auxFiles || {};
+    if (aux.questions || aux.solution) {
+      const tabs = document.getElementById('pdf-tabs');
+      tabs.style.display = 'flex';
+      document.getElementById('tab-questions').style.display = aux.questions ? '' : 'none';
+      document.getElementById('tab-solution').style.display = aux.solution ? '' : 'none';
+      tabs.querySelectorAll('button[data-view]').forEach(btn => {
+        btn.onclick = () => {
+          __pdfView = btn.dataset.view;
+          applyPdfView(state.students[state.currentIdx]);
+        };
+      });
+      // Separate-window buttons
+      const winSol = document.getElementById('win-solution');
+      const winQ = document.getElementById('win-questions');
+      if (aux.solution) { winSol.style.display = ''; winSol.onclick = () => { __autoOpenedAux = true; openAuxWindow('solution'); }; }
+      if (aux.questions) { winQ.style.display = ''; winQ.onclick = () => { __autoOpenedAux = true; openAuxWindow('questions'); }; }
+      // Auto-open the solution in a separate window on the first user gesture
+      const gestureOpen = () => { autoOpenSolutionOnce(); if (__autoOpenedAux) { document.removeEventListener('keydown', gestureOpen); document.removeEventListener('click', gestureOpen); } };
+      document.addEventListener('keydown', gestureOpen);
+      document.addEventListener('click', gestureOpen);
+    }
+    // Wire up nav buttons that work in embedded mode (use showStudentEmbedded instead)
+    document.getElementById('next-btn').onclick = () => {
+      saveCurrent();
+      let next = state.currentIdx + 1;
+      while (next < state.students.length && (state.students[next].status === 'graded' || state.students[next].status === 'no_submission' || state.students[next].status === 'extension')) next++;
+      if (next >= state.students.length) next = (state.currentIdx + 1) % state.students.length;
+      showStudentEmbedded(next);
+    };
+    document.getElementById('prev-btn').onclick = () => {
+      saveCurrent();
+      showStudentEmbedded(Math.max(0, state.currentIdx - 1));
+    };
+    document.getElementById('skip-btn').onclick = () => {
+      state.students[state.currentIdx].status = 'skipped';
+      saveState();
+      document.getElementById('next-btn').click();
+    };
+    document.getElementById('back-to-setup-btn').style.display = 'none'; // no setup in embedded
+    document.getElementById('export-btn').addEventListener('click', exportCSV);
+    { const pb = document.getElementById('push-btn'); if (pb) pb.addEventListener('click', exportMoodlePush); }
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      if (confirm('למחוק נתונים שמורים ולהתחיל מחדש?')) {
+        clearStoredState(); location.reload();
+      }
+    });
+    let timer;
+    const debounce = () => { clearTimeout(timer); timer = setTimeout(saveCurrent, 600); };
+    const markInput = () => { const s = state.students[state.currentIdx]; if (s) s._interacted = true; };
+    document.getElementById('grade-input').addEventListener('input', () => { markInput(); debounce(); });
+    document.getElementById('notes-input').addEventListener('input', () => { markInput(); debounce(); });
+    document.addEventListener('keydown', e => handleShortcut(e));
+    // Override list item click handler in renderList() — re-bind via a wrapper:
+    const origRenderList = renderList;
+    window.renderList = function() {
+      origRenderList();
+      document.querySelectorAll('.student-item').forEach((el, i) => {
+        el.onclick = () => { saveCurrent(); showStudentEmbedded(i); };
+      });
+    };
+    initFromEmbedded(window.__EMBEDDED_DATA);
+    return;
+  }
+
+  // === Normal mode (folder picker) ===
+  // Course preset + scheme
+  const sel = document.getElementById('course-select');
+  const max = document.getElementById('max-grade');
+  const schemeSel = document.getElementById('grading-scheme');
+  sel.addEventListener('change', applyCoursePreset);
+  max.addEventListener('change', rememberCoursePreset);
+  schemeSel.addEventListener('change', () => { rememberCoursePreset(); updateMaxGradeVisibility(); });
+  applyCoursePreset();
+
+  // FSA picker
+  document.getElementById('pick-folder-btn').addEventListener('click', pickFolder);
+  document.getElementById('start-btn').addEventListener('click', startGrading);
+
+  // Manual drag/drop fallback
+  bindDrop(document.getElementById('drop-pdfs'), true);
+  bindDrop(document.getElementById('drop-csv'), false);
+  document.getElementById('pdf-input').addEventListener('change', e => {
+    pdfFiles = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+    updateManualStatus();
+  });
+  document.getElementById('csv-input').addEventListener('change', e => {
+    pickedCsv = e.target.files[0]; updateManualStatus();
+  });
+  document.getElementById('start-manual-btn').addEventListener('click', startGrading);
+
+  // Grader controls
+  document.getElementById('next-btn').addEventListener('click', () => {
+    saveCurrent();
+    let next = state.currentIdx + 1;
+    while (next < state.students.length && state.students[next].status === 'graded') next++;
+    if (next >= state.students.length) next = (state.currentIdx + 1) % state.students.length;
+    showStudent(next);
+  });
+  document.getElementById('prev-btn').addEventListener('click', () => {
+    saveCurrent();
+    showStudent(Math.max(0, state.currentIdx - 1));
+  });
+  document.getElementById('skip-btn').addEventListener('click', () => {
+    state.students[state.currentIdx].status = 'skipped';
+    saveState();
+    document.getElementById('next-btn').click();
+  });
+  document.getElementById('back-to-setup-btn').addEventListener('click', () => {
+    saveCurrent();
+    document.getElementById('grader').style.display = 'none';
+    document.getElementById('setup').style.display = 'block';
+  });
+  document.getElementById('export-btn').addEventListener('click', exportCSV);
+  document.getElementById('push-btn').addEventListener('click', exportMoodlePush);
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    if (confirm('למחוק את כל הנתונים ולחזור למסך הראשי?')) {
+      clearStoredState(); location.reload();
+    }
+  });
+
+  // Autosave on input (debounced) + mark interaction
+  let timer;
+  const debounce = () => { clearTimeout(timer); timer = setTimeout(saveCurrent, 600); };
+  const markInput = () => { const s = state.students[state.currentIdx]; if (s) s._interacted = true; };
+  document.getElementById('grade-input').addEventListener('input', () => { markInput(); debounce(); });
+  document.getElementById('notes-input').addEventListener('input', () => { markInput(); debounce(); });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => handleShortcut(e));
+
+  // Restore folder handle from IDB
+  try {
+    const h = await idbGet('folderHandle');
+    if (h) {
+      folderHandle = h;
+      // Don't auto-trigger permission prompt; show a hint that they can reload the folder
+      document.getElementById('pick-folder-btn').textContent = '📁 טען מחדש את התיקייה';
+    }
+  } catch {}
+
+  // Restore previous session banner
+  const stored = loadStoredState();
+  if (stored && stored.students && stored.students.length) {
+    const banner = document.getElementById('resume-banner');
+    document.getElementById('resume-date').textContent = new Date(stored.savedAt).toLocaleString('he-IL');
+    document.getElementById('resume-count').textContent = stored.students.length;
+    document.getElementById('resume-graded').textContent = stored.students.filter(s => s.status === 'graded').length;
+    banner.style.display = 'block';
+
+    document.getElementById('resume-no').onclick = () => {
+      if (confirm('למחוק נתונים שמורים?')) { clearStoredState(); location.reload(); }
+    };
+    document.getElementById('resume-yes').onclick = async () => {
+      Object.assign(state, stored);
+      // Need PDFs — try folder first
+      if (folderHandle) {
+        await loadFromFolder();
+      }
+      if (!pdfFiles.length) {
+        alert('בחרי תיקייה כדי לטעון את ה-PDFים מחדש');
+        await pickFolder();
+      }
+      // Re-link PDF file references
+      showGrader();
+    };
+  }
+});
+</script>
+</body>
+</html>

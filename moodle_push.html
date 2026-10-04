@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moodle Push — התקנה</title>
+<style>
+  body { font-family: system-ui, "Segoe UI", Arial, sans-serif; max-width: 780px; margin: 30px auto; padding: 0 18px; color: #1f2937; line-height: 1.6; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 16px; margin-top: 28px; }
+  .bm { display: inline-block; background: #4f46e5; color: #fff !important; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 15px; }
+  .step { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 16px; margin: 10px 0; }
+  code { background: #eef2ff; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  .warn { background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; }
+  textarea { width: 100%; height: 130px; font-family: monospace; font-size: 11px; direction: ltr; }
+  ol { padding-inline-start: 22px; }
+</style>
+</head>
+<body>
+<h1>📤 Moodle Push — העלאת ציונים בלחיצה אחת</h1>
+<p>הכלי הזה פותר את הבעיה ש-Moodle לא מקבל ציוני עובר/לא-עובר דרך CSV. במקום זה, לוחצים כפתור אחד ו-Moodle מתמלא לבד — ציונים <b>וגם</b> הערות, בכל השפות ובכל קורס (הוא קורא את ערכי הסולם ישירות מהדף).</p>
+
+<h2>שלב 1 — התקנה (פעם אחת)</h2>
+<div class="step">
+  גררי את הכפתור הזה אל שורת הסימניות בדפדפן (Bookmarks Bar):
+  <p style="text-align:center;margin:14px 0">
+    <a class="bm" href='javascript:(function(){var KEY="moodlePush";var m=location.href.match(/[?&]id=(\d+)/);var cmid=m?m[1]:"x";var store=KEY+"_"+cmid;function norm(s){return (s||"").replace(/\s+/g," ").trim();}function promptPaste(cb){var t=prompt("הדביקי כאן את נתוני הציונים (JSON) שהעתקת מכלי הבדיקה:");if(!t)return;try{var p=JSON.parse(t);localStorage.setItem(store,JSON.stringify(p));cb(p);}catch(e){alert("JSON לא תקין");}}function getPayload(cb){var raw=localStorage.getItem(store);if(raw){try{return cb(JSON.parse(raw));}catch(e){}}if(navigator.clipboard&&navigator.clipboard.readText){navigator.clipboard.readText().then(function(t){try{var p=JSON.parse(t);localStorage.setItem(store,JSON.stringify(p));cb(p);}catch(e){promptPaste(cb);}}).catch(function(){promptPaste(cb);});}else{promptPaste(cb);}}function apply(payload){var selects=[].slice.call(document.querySelectorAll("select[name^=quickgrade_]"));var texts=[].slice.call(document.querySelectorAll("input[type=text][name^=quickgrade_]"));if(!selects.length&&!texts.length){alert("צריך קודם לסמן מתן ציון מהיר ולרענן");return;}var passVal=null,failVal=null;if(selects.length){var opts=[].slice.call(selects[0].options).map(function(o){return{t:o.text.trim(),v:o.value};}).filter(function(o){return o.v!=="-1"&&o.v!==""&&!isNaN(+o.v);});if(opts.length){opts.sort(function(a,b){return(+a.v)-(+b.v);});failVal=opts[0].v;passVal=opts[opts.length-1].v;}}var keys=payload.students.map(function(s){return s.name;}).sort(function(a,b){return b.length-a.length;});var byName={};payload.students.forEach(function(s){byName[s.name]=s;});function rowName(el){var tr=el.closest("tr");var a=tr&&tr.querySelector("td.username a, .cell.c1 a");return norm(a?a.textContent:"");}function matchKey(raw){return keys.find(function(k){return raw.endsWith(k)||raw.replace(/\s/g,"").endsWith(k.replace(/\s/g,""));});}var g=0,f=0,un=[];selects.concat(texts).forEach(function(el){var raw=rowName(el);var key=matchKey(raw);if(!key){un.push(raw);return;}var s=byName[key];if(el.tagName==="SELECT"){var v=s.verdict==="pass"?passVal:s.verdict==="fail"?failVal:null;if(v!=null){el.value=v;el.dispatchEvent(new Event("change",{bubbles:true}));g++;}}else{if(s.grade!=null){el.value=s.grade;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));g++;}}var uid=el.name.split("_").pop();var fb=document.querySelector("textarea[name=quickgrade_comments_"+uid+"]");if(fb&&s.note){fb.value=s.note;fb.dispatchEvent(new Event("input",{bubbles:true}));fb.dispatchEvent(new Event("change",{bubbles:true}));f++;}});panel(g,f,un);}function panel(g,f,un){var d=document.getElementById("mpush");if(d)d.remove();d=document.createElement("div");d.id="mpush";d.style.cssText="position:fixed;top:12px;left:12px;z-index:99999;background:#111;color:#fff;padding:12px 14px;border-radius:10px;font:13px sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:320px;direction:rtl";d.innerHTML="<b>📤 Push</b><br>עודכנו "+g+" ציונים, "+f+" הערות בעמוד זה."+(un.length?"<br>⚠️ לא זוהו: "+un.length:"")+"<br><button id=mpsave style=\"margin-top:8px;padding:6px 12px;background:#22c55e;border:0;border-radius:6px;color:#fff;cursor:pointer\">💾 שמור עמוד</button> <button id=mpreset style=\"padding:6px 10px;background:#b45309;border:0;border-radius:6px;color:#fff;cursor:pointer\">↻ נתונים חדשים</button> <button id=mpx style=\"padding:6px 10px;background:#444;border:0;border-radius:6px;color:#fff;cursor:pointer\">✕</button><br><small style=opacity:.7>אחרי שמירה — עמוד הבא ולחץ שוב על הסימנייה</small>";document.body.appendChild(d);document.getElementById("mpx").onclick=function(){d.remove();};document.getElementById("mpreset").onclick=function(){localStorage.removeItem(store);d.remove();alert("אופס. העתיקי JSON חדש ולחצי שוב.");};document.getElementById("mpsave").onclick=function(){var b=document.querySelector("[name=savequickgrades]")||[].slice.call(document.querySelectorAll("form button,form input[type=submit]")).find(function(x){return /שמיר|Save/i.test(x.textContent||x.value||"");});if(b)b.click();else alert("לא נמצא כפתור שמירה");};}getPayload(apply);})();'>📤 Moodle Push</a>
+  </p>
+  אם שורת הסימניות מוסתרת: <code>Cmd+Shift+B</code> (Mac) מראה/מסתיר אותה.
+</div>
+
+<h2>שלב 2 — שימוש (בכל בדיקה)</h2>
+<ol>
+  <li>בכלי הבדיקה (Moodle Grader), אחרי שסיימת לבדוק — לחצי <b>«📤 ייצוא ל-Moodle»</b>. זה מעתיק את הציונים+הערות ל-clipboard.</li>
+  <li>ב-Moodle: בעמוד ההגשות של המטלה, סמני <b>«מתן ציון מהיר»</b> (העמוד יתרענן ויופיעו תיבות ציון).</li>
+  <li>לחצי על הסימנייה <b>📤 Moodle Push</b>. היא תמלא את כל הציונים וההערות בעמוד.</li>
+  <li>לחצי <b>«💾 שמור עמוד»</b> בחלונית שמופיעה (או כפתור «שמירה» של Moodle).</li>
+  <li>אם יש יותר מ-50 סטודנטים — עברי לעמוד הבא ולחצי שוב על הסימנייה (הנתונים כבר שמורים, לא צריך להעתיק שוב).</li>
+</ol>
+
+<div class="warn">
+  <b>למה זה עדיף על CSV:</b> העלאת גליון ציונים ב-Moodle <u>לא</u> מייבאת ציוני סולם (עובר/לא-עובר) — היא שותקת ומעדכנת רק הערות. הסימנייה הזו עוקפת את זה לגמרי ותמיד מעדכנת גם ציון וגם הערה יחד, כך שהערות אף פעם לא נמחקות.
+</div>
+
+<h2>פורמט הנתונים (למי שרוצה לדעת)</h2>
+<p>כלי הבדיקה מייצא JSON כזה. הסימנייה קוראת אותו:</p>
+<textarea readonly>{
+  "assignment": "תרגיל 11",
+  "scheme": "pass_fail",
+  "students": [
+    { "name": "ישראלה ישראלי", "verdict": "pass", "note": "יפה" },
+    { "name": "פלוני אלמוני", "verdict": "fail", "note": "" }
+  ]
+}</textarea>
+<p style="color:#6b7280;font-size:13px">ל-scheme של נקודות (0–100), כל סטודנט מקבל <code>"grade": 85</code> במקום <code>verdict</code>.</p>
+</body>
+</html>

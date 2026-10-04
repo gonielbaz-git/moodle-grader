@@ -1,0 +1,8 @@
+# Student data — never commit
+moodle_grading/
+data.js
+worksheet.csv
+moodle_push.json
+*.pdf
+*.zip
+.DS_Store
