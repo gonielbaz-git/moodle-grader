@@ -78,7 +78,9 @@ section = cfg.get('section', '')
 ASSIGNMENT_NAME = f"תרגיל {N}"
 
 # 1) Map participant-id -> pdf(s) from the zip's per-student folder names.
-folder_re = re.compile(r'_(\d+)_assignsubmission_[a-z]+(?:/|$)')
+# Works for both ZIP layouts Moodle produces: per-student folders
+#   "Name_123_assignsubmission_file/x.pdf"  and flat  "Name_123_assignsubmission_file_x.pdf"
+folder_re = re.compile(r'_(\d+)_assignsubmission_[a-z]+(?:/|_|$)')
 id_to_infos, id_to_other = {}, {}
 with zipfile.ZipFile(BUNDLE) as z:
     for info in z.infolist():
@@ -127,6 +129,8 @@ id_re = re.compile(r'(\d+)')
 students, matched = [], 0
 for row in csv_all_rows:
     name = row[header[cols['name']]] if cols['name'] >= 0 else ''
+    # Moodle system/test accounts (e.g. "TAU Digital1") are not students — never grade them.
+    if re.match(r'\s*TAU\s*Digital', name, re.I): students.append(None); continue
     ident = row[header[cols['identifier']]] if cols['identifier'] >= 0 else ''
     mm = id_re.search(ident or ''); pid = mm.group(1) if mm else None
     pdfs = id_to_pdf.get(pid, []) if pid else []
@@ -139,7 +143,13 @@ for row in csv_all_rows:
     sub_date = (row[header[cols['submitDate']]] if cols['submitDate'] >= 0 else '').strip()
     # Submitted, but nothing we can show as a PDF (image/docx/online text) — must not be auto-failed.
     submitted = sub_date not in ('', '-') or bool(pid and id_to_other.get(pid))
-    students.append({'name': name, 'id': pid or '', 'pdfFile': './'+pdf if pdf else None,
+    # Draft = uploaded but never clicked "submit"; late = submitted after the deadline. Shown as a flag.
+    flag = ''
+    if 'טיוטה' in status_txt or 'draft' in status_txt.lower():
+        flag = '📝 טיוטה — הקובץ הועלה אבל הסטודנט לא לחץ "הגשה"'
+    elif 'מאוחר' in status_txt or 'late' in status_txt.lower():
+        flag = '⏰ ' + status_txt.split(' - ')[0].strip()
+    students.append({'name': name, 'id': pid or '', 'pdfFile': './'+pdf if pdf else None, 'statusFlag': flag,
                      'pdfFiles': ['./'+x for x in pdfs], 'submitted': submitted,
                      'otherFiles': id_to_other.get(pid, []) if pid else [],
                      'submitDate': row[header[cols['submitDate']]] if cols['submitDate'] >= 0 else '',
@@ -149,7 +159,10 @@ for row in csv_all_rows:
                      'gradeFromCsv': row[header[cols['grade']]] if cols['grade'] >= 0 else '',
                      'feedbackFromCsv': row[header[cols['feedback']]] if cols['feedback'] >= 0 else ''})
 
-data = {'course': COURSE, 'assignmentName': ASSIGNMENT_NAME, 'maxGrade': maxG,
+# Drop skipped accounts from BOTH lists together — the grader pairs students[i] with csvAllRows[i].
+csv_all_rows = [r for r, st in zip(csv_all_rows, students) if st is not None]
+students = [x for x in students if x is not None]
+data = {'course': COURSE, 'courseLabel': cfg.get('label', ''), 'assignmentName': ASSIGNMENT_NAME, 'maxGrade': maxG,
         'gradingScheme': scheme, 'sectionLabel': section,
         'csvHeader': header, 'cols': cols, 'csvAllRows': csv_all_rows,
         'students': students, 'auxFiles': {}}

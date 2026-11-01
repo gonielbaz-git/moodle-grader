@@ -1,5 +1,5 @@
 {
-  "_comment": "Config for the Moodle grading workflow. Add a block per course. 'scheme' is one of: pass_fail (עובר/לא עובר) or points (numeric 0..maxGrade). 'section' is an optional banner shown in the grader.",
+  "_comment": "Config for the Moodle grading workflow. Add a block per course. 'scheme' is one of: pass_fail (עובר/לא עובר), binary_0_100, three_level (0/50/100) or numeric (0..maxGrade). 'section' is an optional banner shown in the grader.",
   "courses": {
     "physics_a": {
       "label": "פיסיקה א'",
@@ -12,6 +12,13 @@
       "scheme": "binary_0_100",
       "maxGrade": 100,
       "section": ""
+    },
+    "quantum": {
+      "label": "פיזיקה קוונטית מתקדמת",
+      "scheme": "three_level",
+      "maxGrade": 100,
+      "section": "",
+      "moodleCourseId": "321411501"
     }
   }
 }
