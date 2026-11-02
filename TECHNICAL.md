@@ -21,6 +21,7 @@ This is a standalone single-file HTML tool (`moodle_grader.html`) for grading Mo
 |---|---|---|
 | `physics_a` | פיסיקה א׳ (0455181799) | עבר / לא עבר (pass/fail) |
 | `math_tools` | כלים מתמטיים לפיזיקה (0509111710) | בינארי: 0 או 100 |
+| `quantum` | פיזיקה קוונטית מתקדמת (0321411501) | 0 / 50 / 100 |
 | `custom` | אחר | מספרי (0–max) |
 
 ## Grading schemes
@@ -28,21 +29,28 @@ This is a standalone single-file HTML tool (`moodle_grader.html`) for grading Mo
 - **numeric** — free number input, configurable max grade
 - **binary_0_100** — two big buttons: ✓ 100 / ✗ 0, keyboard `1`/`0`
 - **pass_fail** — two big buttons: ✓ עבר / ✗ לא עבר, keyboard `P`/`F` or `1`/`0`
+- **three_level** — three buttons: 100 / 50 / 0, keyboard `1`/`5`/`0` (e.g. quantum)
 
 ## Keyboard shortcuts (in grader view)
 
+Letter shortcuts use the physical key (`e.code`), so they work with the keyboard in Hebrew too.
+Choosing a grade does **not** jump to the next student, so a note can still be added.
+
 | Key | Action |
 |---|---|
-| `Enter` / `→` (RTL: left arrow) | Save & next |
-| `←` (RTL: right arrow) | Previous |
-| `Space` | Skip |
-| `Cmd/Ctrl+Enter` | Save & next (works from text fields) |
-| `1` / `P` | Quick-grade positive (100 / עבר) |
-| `0` / `F` | Quick-grade negative (0 / לא עבר) |
-| `S` | Switch PDF view to student submission |
-| `Q` | Switch PDF view to exercise questions (if provided) |
-| `A` | Switch PDF view to full solution (if provided) |
-| `W` | Open solution/questions in a separate window |
+| `1` / `5` / `0` | Grade 100 / 50 / 0 (three_level); `1`/`0` for binary; `1`/`P`, `0`/`F` for pass/fail |
+| `N` or `Tab` | Write a note · `Esc` (or `Tab`) leaves the note box |
+| `G` | Type a grade by hand |
+| `Z` / `X` / `C` (/ `B` / `M`) | Quick comment buttons (default מצוין / מעולה / הרוב נכון אבל...). A phrase ending in `...` drops you into the note to keep typing. ✏️ edits them. |
+| `Enter` | Save & next (blocked if the grade is invalid) · `Cmd/Ctrl+Enter` works from inside a note |
+| `←` / `→` | Next / previous (RTL) · `U` = next ungraded · `Space` = skip |
+| `↓` / `↑`, `J` / `K`, PgDn / PgUp | Next / previous PDF page (the grader never focuses the PDF viewer, which would swallow keys) |
+| `V` | Toggle fit-width / whole page |
+| `]` / `[` / `\` | Wider / narrower side panel / reset (or drag the bar between panel and PDF; width is remembered) |
+| `S` / `Q` / `A` / `W` | Submission / questions / solution / solution in a separate window |
+| `H` or `?` | Shortcut help |
+
+Clicking the PDF would normally hand the keyboard to Chrome's PDF viewer; the grader takes focus straight back, so shortcuts keep working. The solution no longer auto-opens in a new window (it stole focus); press `W`.
 
 ## State / persistence
 

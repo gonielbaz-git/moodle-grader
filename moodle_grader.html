@@ -77,7 +77,12 @@
   #pdf-area iframe { flex: 1; width: 100%; border: 0; display: block; min-height: 0; }
   #pdf-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #b5a8c8; text-align: center; font-size: 14px; }
 
-  #side { width: 400px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; padding-top: 4px; }
+  #splitter { width: 7px; flex: none; cursor: col-resize; background: var(--border); position: relative; z-index: 5; transition: background .15s; }
+  #splitter:hover, #splitter.dragging { background: var(--accent); }
+  #splitter::after { content: ''; position: absolute; top: 50%; left: 2px; width: 3px; height: 36px; margin-top: -18px; border-radius: 2px; background: rgba(255,255,255,.7); }
+  body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
+  body.resizing iframe { pointer-events: none; }
+  #side { flex: none; width: 400px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; padding-top: 4px; }
 
   .side-top { padding: 14px 18px 12px; background: linear-gradient(135deg, var(--accent-soft) 0%, white 100%); border-bottom: 1px solid var(--border); }
   .side-top .course-tag { display: inline-block; background: var(--accent); color: white; font-size: 11px; padding: 3px 9px; border-radius: 12px; font-weight: 500; }
@@ -119,6 +124,18 @@
   .badge.graded { background: var(--teal-soft); color: var(--teal); }
   .badge.skipped { background: var(--rose-soft); color: var(--rose); }
   .badge.no_submission { background: #f3f3f5; color: #6b6486; border: 1px solid #d6d2e3; }
+  #quick-grade button { transition: 0.12s; }
+  #quick-grade button.qg-selected { outline: 3px solid var(--accent-deep); outline-offset: 2px; transform: scale(1.03); }
+  #quick-grade button .k { display:block; font-size:10px; font-weight:400; opacity:.65; margin-top:2px; }
+  #help-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 9999; }
+  #help-overlay .box { background: white; border-radius: 12px; padding: 18px 22px; max-width: 460px; font-size: 13px; line-height: 1.9; direction: rtl; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+  #help-overlay kbd { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 1px 6px; font-family: monospace; }
+  .status-flag { margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  #phrase-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  #phrase-bar button { padding: 5px 10px; font-size: 13px; border-radius: 14px; border: 1px solid var(--border-strong); background: white; color: var(--text); cursor: pointer; }
+  #phrase-bar button:hover { background: var(--accent-soft); border-color: var(--accent); }
+  #phrase-bar button kbd { font-family: monospace; font-size: 10px; opacity: .55; margin-right: 4px; }
+  #phrase-bar button.edit { border-style: dashed; color: var(--muted); padding: 5px 8px; }
   .kbd-hint { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
   .kbd-hint kbd { background: white; border: 1px solid var(--border-strong); border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 11px; color: var(--accent-deep); }
   .student-item .has-note-dot { display: inline-block; width: 8px; height: 8px; background: var(--teal); border-radius: 50%; margin-left: 6px; }
@@ -154,6 +171,7 @@
     <select id="course-select">
       <option value="physics_a">פיסיקה א' (0455181799)</option>
       <option value="math_tools">כלים מתמטיים לפיזיקה (0509111710)</option>
+      <option value="quantum">פיזיקה קוונטית מתקדמת (0321411501)</option>
       <option value="custom">אחר</option>
     </select>
   </div>
@@ -166,6 +184,7 @@
     <select id="grading-scheme">
       <option value="numeric">מספרי (0–max)</option>
       <option value="binary_0_100">בינארי: 0 או 100</option>
+      <option value="three_level">שלוש רמות: 0 / 50 / 100</option>
       <option value="pass_fail">עבר / לא עבר</option>
     </select>
   </div>
@@ -228,8 +247,9 @@
       <label>🎯 ציון</label>
       <!-- Quick-grade buttons (visible for binary or pass/fail schemes) -->
       <div id="quick-grade" style="display:none; gap:8px; margin-bottom:8px;">
-        <button id="qg-pos" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#dcfce7; color:#166534; border:2px solid #86efac; border-radius:8px; cursor:pointer;"></button>
-        <button id="qg-neg" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#fee2e2; color:#991b1b; border:2px solid #fca5a5; border-radius:8px; cursor:pointer;"></button>
+        <button id="qg-pos" tabindex="-1" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#dcfce7; color:#166534; border:2px solid #86efac; border-radius:8px; cursor:pointer;"></button>
+        <button id="qg-mid" tabindex="-1" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#fef9c3; color:#854d0e; border:2px solid #fde047; border-radius:8px; cursor:pointer; display:none;"></button>
+        <button id="qg-neg" tabindex="-1" style="flex:1; padding:14px; font-size:16px; font-weight:600; background:#fee2e2; color:#991b1b; border:2px solid #fca5a5; border-radius:8px; cursor:pointer;"></button>
       </div>
       <input type="text" id="grade-input" inputmode="decimal" style="text-align:center;">
       <div id="grade-meta"></div>
@@ -238,8 +258,10 @@
 
     <div class="grade-block">
       <label>✏️ הערות שלך</label>
+      <div id="phrase-bar"></div>
       <textarea id="notes-input" placeholder="הערות לסטודנט..."></textarea>
     </div>
+    <div id="kbd-sink" tabindex="-1" style="position:absolute;width:0;height:0;overflow:hidden;outline:none;"></div>
 
     <div class="nav">
       <button class="small" id="back-to-setup-btn" title="חזרה להגדרות">↩</button>
@@ -257,6 +279,8 @@
       <button id="push-btn">📤 ייצוא ל-Moodle</button>
     </div>
   </div>
+
+  <div id="splitter" title="גררי לשינוי רוחב · [ / ] במקלדת · דאבל-קליק לאיפוס"></div>
 
   <div id="pdf-area">
     <div id="pdf-tabs">
@@ -340,6 +364,7 @@ function savePrefs(p) { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); }
 const DEFAULT_SCHEMES = {
   physics_a:  { scheme: 'pass_fail',     maxGrade: 100 },
   math_tools: { scheme: 'binary_0_100',  maxGrade: 100 },
+  quantum:    { scheme: 'three_level',   maxGrade: 100 },
   custom:     { scheme: 'numeric',       maxGrade: 100 },
 };
 function applyCoursePreset() {
@@ -371,35 +396,51 @@ function updateMaxGradeVisibility() {
   maxRow.style.display = (schemeSel.value === 'numeric') ? 'flex' : 'none';
 }
 // ===== Grade UI rendering by scheme =====
+// Quick-grade button sets per scheme. Pressing a grade does NOT jump to the next
+// student — so a note can still be added. Enter / ⌘Enter moves on.
+const QG_SETS = {
+  binary_0_100: [ {id:'qg-pos', v:'100', t:'✓ 100', k:'1'}, {id:'qg-neg', v:'0', t:'✗ 0', k:'0'} ],
+  three_level:  [ {id:'qg-pos', v:'100', t:'✓ 100', k:'1'}, {id:'qg-mid', v:'50', t:'½ 50', k:'5'}, {id:'qg-neg', v:'0', t:'✗ 0', k:'0'} ],
+  pass_fail:    [ {id:'qg-pos', v:'עובר', t:'✓ עובר', k:'1 / P'}, {id:'qg-neg', v:'לא עובר', t:'✗ לא עובר', k:'0 / F'} ],
+};
+function setQuickGrade(v) {
+  const s = state.students[state.currentIdx]; if (!s) return;
+  s._interacted = true;
+  const input = document.getElementById('grade-input');
+  input.value = v;
+  input.dispatchEvent(new Event('input'));
+  saveCurrent();
+  syncQuickGrade();
+}
+function syncQuickGrade() {
+  const v = (document.getElementById('grade-input').value || '').trim();
+  ['qg-pos','qg-mid','qg-neg'].forEach(id => {
+    const b = document.getElementById(id); if (!b) return;
+    b.classList.toggle('qg-selected', b.dataset.v !== undefined && b.dataset.v === v);
+  });
+}
 function setupGradeUI(scheme, maxGrade) {
   const qg = document.getElementById('quick-grade');
-  const qgPos = document.getElementById('qg-pos');
-  const qgNeg = document.getElementById('qg-neg');
   const meta = document.getElementById('grade-meta');
   const hint = document.getElementById('kbd-hint');
-  const input = document.getElementById('grade-input');
   if (!qg) return;
-  const markInteracted = () => { const s = state.students[state.currentIdx]; if (s) s._interacted = true; };
-  if (scheme === 'binary_0_100') {
+  const set = QG_SETS[scheme];
+  ['qg-pos','qg-mid','qg-neg'].forEach(id => { const b = document.getElementById(id); if (b) { b.style.display = 'none'; delete b.dataset.v; } });
+  if (set) {
     qg.style.display = 'flex';
-    qgPos.textContent = '✓ 100';
-    qgNeg.textContent = '✗ 0';
-    qgPos.onclick = () => { markInteracted(); input.value = '100'; input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
-    qgNeg.onclick = () => { markInteracted(); input.value = '0';   input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
-    meta.textContent = 'בינארי — 0 או 100';
-    if (hint) hint.innerHTML = '<kbd>1</kbd> = 100 · <kbd>0</kbd> = 0 · <kbd>Enter</kbd> = הבא · <kbd>←</kbd>/<kbd>→</kbd> = ניווט';
-  } else if (scheme === 'pass_fail') {
-    qg.style.display = 'flex';
-    qgPos.textContent = '✓ עובר';
-    qgNeg.textContent = '✗ לא עובר';
-    qgPos.onclick = () => { markInteracted(); input.value = 'עובר';     input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
-    qgNeg.onclick = () => { markInteracted(); input.value = 'לא עובר'; input.dispatchEvent(new Event('input')); document.getElementById('next-btn').click(); };
-    meta.textContent = 'עובר / לא עובר';
-    if (hint) hint.innerHTML = '<kbd>P</kbd>/<kbd>1</kbd> = עובר · <kbd>F</kbd>/<kbd>0</kbd> = לא עובר · <kbd>Enter</kbd> = הבא';
+    set.forEach(o => {
+      const b = document.getElementById(o.id);
+      b.style.display = '';
+      b.dataset.v = o.v;
+      b.innerHTML = o.t + '<span class="k">' + o.k + '</span>';
+      b.onclick = () => { setQuickGrade(o.v); b.blur(); };
+    });
+    meta.textContent = scheme === 'three_level' ? '0 / 50 / 100' : scheme === 'pass_fail' ? 'עובר / לא עובר' : 'בינארי — 0 או 100';
+    if (hint) hint.innerHTML = 'ציון ← <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> / <kbd>N</kbd> הערה ← <kbd>Esc</kbd> ← <kbd>Enter</kbd> הבא · <kbd>H</kbd> = כל הקיצורים';
   } else {
     qg.style.display = 'none';
     meta.innerHTML = 'מתוך <span id="max-display">' + (maxGrade || 100) + '</span>';
-    if (hint) hint.innerHTML = 'הקלידי ציון · <kbd>Enter</kbd> = שמור והבא';
+    if (hint) hint.innerHTML = '<kbd>G</kbd> הקלדת ציון · <kbd>N</kbd> הערה · <kbd>Enter</kbd> שמור והבא · <kbd>H</kbd> = קיצורים';
   }
 }
 
@@ -662,10 +703,7 @@ function showGrader() {
   document.getElementById('grader').style.display = 'flex';
   const sch = state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme;
   setupGradeUI(sch, state.maxGrade);
-  document.getElementById('course-tag').textContent =
-    state.course === 'physics_a' ? 'פיסיקה א\' · ' + state.assignmentName :
-    state.course === 'math_tools' ? 'כלים מתמטיים · ' + state.assignmentName :
-    state.assignmentName;
+  document.getElementById('course-tag').textContent = courseTagText();
   renderList();
   showStudent(state.currentIdx);
 }
@@ -698,6 +736,8 @@ function showStudent(idx) {
   document.getElementById('grade-input').value = s.grade || '';
   markGradeInvalid(!!s.grade && !gradeValid(s.grade));
   document.getElementById('notes-input').value = s.notes || '';
+  syncQuickGrade();
+  __pdfPage = 1;
   document.getElementById('submit-date').textContent = s.submitDate || '—';
 
   // Student's own note
@@ -713,15 +753,21 @@ function showStudent(idx) {
   if (file) {
     if (!pdfObjUrls[idx]) pdfObjUrls[idx] = URL.createObjectURL(file);
     // #view=FitH gives continuous fit-to-width; scrollbar visible by default in Chrome PDF viewer
-    iframe.src = pdfObjUrls[idx] + '#view=FitH&toolbar=1&navpanes=0';
+    setPdfSrc(iframe, pdfObjUrls[idx]);
     iframe.style.display = 'block'; empty.style.display = 'none';
   } else {
     iframe.style.display = 'none'; empty.style.display = 'block';
-    iframe.src = 'about:blank';
+    iframe.src = 'about:blank'; iframe.dataset.base = '';
   }
   renderList();
 }
 
+function courseTagText() {
+  const lbl = state.courseLabel ||
+    (state.course === 'physics_a' ? 'פיסיקה א\'' : state.course === 'math_tools' ? 'כלים מתמטיים' :
+     state.course === 'quantum' ? 'קוונטית מתקדמת' : '');
+  return lbl ? lbl + ' · ' + state.assignmentName : state.assignmentName;
+}
 function curScheme() { return state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme; }
 function gradeValid(v) {
   v = String(v == null ? '' : v).trim();
@@ -729,6 +775,7 @@ function gradeValid(v) {
   if (sch === 'pass_fail') return v === 'עובר' || v === 'לא עובר' || v === 'לא עבר';
   if (!/^\d+(\.\d+)?$/.test(v)) return false;
   if (sch === 'binary_0_100') return parseFloat(v) === 0 || parseFloat(v) === 100;
+  if (sch === 'three_level') return [0, 50, 100].includes(parseFloat(v));
   return parseFloat(v) <= (parseFloat(state.maxGrade) || 100);
 }
 function markGradeInvalid(bad) {
@@ -825,6 +872,7 @@ async function initFromEmbedded(data) {
   state.assignmentName = data.assignmentName;
   state.maxGrade = data.maxGrade;
   state.gradingScheme = data.gradingScheme || (DEFAULT_SCHEMES[data.course] || DEFAULT_SCHEMES.custom).scheme;
+  state.courseLabel = data.courseLabel || '';
   state.csvHeader = data.csvHeader;
   state.cols = data.cols;
   state.csvAllRows = data.csvAllRows;
@@ -884,6 +932,7 @@ async function initFromEmbedded(data) {
       grade, notes, status,
       submitDate: s.submitDate || '',
       onlineText: s.onlineText || '',
+      statusFlag: s.statusFlag || '',
     };
   });
   // Open on someone who actually has a PDF. Landing on a non-submitter shows an
@@ -905,10 +954,7 @@ function showGraderEmbedded() {
   // Set up grade UI based on scheme (default to course's default)
   const sch = state.gradingScheme || (DEFAULT_SCHEMES[state.course] || DEFAULT_SCHEMES.custom).scheme;
   setupGradeUI(sch, state.maxGrade);
-  document.getElementById('course-tag').textContent =
-    state.course === 'physics_a' ? 'פיסיקה א\' · ' + state.assignmentName :
-    state.course === 'math_tools' ? 'כלים מתמטיים · ' + state.assignmentName :
-    state.assignmentName;
+  document.getElementById('course-tag').textContent = courseTagText();
   renderSectionBanner();
   renderList();
   showStudentEmbedded(state.currentIdx);
@@ -977,6 +1023,40 @@ function renderSectionBanner() {
 
 // Current PDF view ('student' | 'questions' | 'solution') — sticky across navigation
 let __pdfView = 'student';
+// PDF page navigation from the keyboard. Chrome's built-in viewer swallows every key once it
+// has focus (and there is no key to get back out), so the grader never focuses it; instead it
+// re-points the frame at #page=N. Focus stays on the grader the whole time.
+let __pdfPage = 1;
+let __pdfFit = 'FitH';
+function setPdfSrc(iframe, base) {
+  const url = base + '#page=' + __pdfPage + '&view=' + __pdfFit + '&toolbar=1&navpanes=0';
+  if (iframe.dataset.base === base) {
+    // same file: replace the frame so the viewer jumps to the page (hash-only changes are ignored)
+    const nf = iframe.cloneNode(false); nf.src = url; nf.dataset.base = base;
+    iframe.replaceWith(nf);
+  } else { __pdfPage = 1; iframe.src = base + '#page=1&view=' + __pdfFit + '&toolbar=1&navpanes=0'; iframe.dataset.base = base; }
+}
+function pdfToggleFit() {
+  const iframe = document.getElementById('pdf-frame');
+  __pdfFit = __pdfFit === 'FitH' ? 'Fit' : 'FitH';
+  if (iframe && iframe.dataset.base) setPdfSrc(iframe, iframe.dataset.base);
+  showPdfPageToast(__pdfFit === 'Fit' ? 'עמוד שלם' : 'רוחב מלא');
+}
+function pdfPageStep(d) {
+  const iframe = document.getElementById('pdf-frame');
+  if (!iframe || !iframe.dataset.base) return;
+  __pdfPage = Math.max(1, __pdfPage + d);
+  setPdfSrc(iframe, iframe.dataset.base);
+  showPdfPageToast();
+}
+function showPdfPageToast(msg) {
+  let t = document.getElementById('pdf-page-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'pdf-page-toast';
+    t.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#111;color:#fff;padding:6px 12px;border-radius:8px;font-size:13px;z-index:9998;opacity:.85';
+    document.body.appendChild(t); }
+  t.textContent = msg || ('עמוד ' + __pdfPage); t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = 'none'; }, 1200);
+}
 function applyPdfView(s) {
   const iframe = document.getElementById('pdf-frame');
   const empty = document.getElementById('pdf-empty');
@@ -987,10 +1067,10 @@ function applyPdfView(s) {
   else if (s && s.pdfFileName) src = (s.pdfFiles && s.pdfFiles[s._fileIdx || 0]) || s.pdfFileName;
   else missing = true;
   if (src) {
-    iframe.src = src + '#view=FitH&toolbar=1&navpanes=0';
+    setPdfSrc(iframe, src);
     iframe.style.display = 'block'; empty.style.display = 'none';
   } else {
-    iframe.src = 'about:blank';
+    iframe.src = 'about:blank'; iframe.dataset.base = '';
     iframe.style.display = 'none'; empty.style.display = 'block';
     empty.textContent = __pdfView === 'questions' ? 'אין דף שאלות לתרגיל זה' :
                         __pdfView === 'solution' ? 'אין פתרון לתרגיל זה' :
@@ -1015,11 +1095,17 @@ function showStudentEmbedded(idx) {
   document.getElementById('grade-input').value = s.grade || '';
   markGradeInvalid(!!s.grade && !gradeValid(s.grade));
   document.getElementById('notes-input').value = s.notes || '';
+  syncQuickGrade();
+  __pdfPage = 1;
   document.getElementById('submit-date').textContent = s.submitDate || '—';
   const noteBox = document.getElementById('student-note-box');
   if (s.onlineText && s.onlineText.trim()) {
     noteBox.innerHTML = `<div class="student-note"><span class="lbl">💬 הערת הסטודנט</span>${s.onlineText.replace(/</g,'&lt;')}</div>`;
   } else noteBox.innerHTML = '';
+  if (s.statusFlag) {
+    const f = document.createElement('div'); f.className = 'status-flag'; f.textContent = s.statusFlag;
+    noteBox.appendChild(f);
+  }
   // More than one PDF submitted — let the grader flip between them instead of silently showing only the first.
   s._fileIdx = 0;
   if (s.pdfFiles && s.pdfFiles.length > 1) {
@@ -1042,68 +1128,210 @@ function showStudentEmbedded(idx) {
 // ============================================================
 // KEYBOARD SHORTCUTS
 // ============================================================
+// ===== Resizable side panel (drag the splitter, or [ / ] keys). Width is remembered. =====
+const SIDE_W_KEY = 'moodleGraderSideWidth', SIDE_W_DEFAULT = 400;
+function clampSide(w) { return Math.round(Math.max(260, Math.min(w, window.innerWidth * 0.75))); }
+function setSideWidth(w, persist) {
+  const side = document.getElementById('side'); if (!side) return;
+  w = clampSide(w); side.style.width = w + 'px';
+  if (persist) { try { localStorage.setItem(SIDE_W_KEY, String(w)); } catch (e) {} }
+}
+function initSplitter() {
+  let saved = null; try { saved = parseFloat(localStorage.getItem(SIDE_W_KEY)); } catch (e) {}
+  setSideWidth(saved > 0 ? saved : SIDE_W_DEFAULT, false);
+  const sp = document.getElementById('splitter'), side = document.getElementById('side');
+  if (!sp || !side) return;
+  sp.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    const r = side.getBoundingClientRect();
+    const sideOnRight = r.left > sp.getBoundingClientRect().left; // splitter is left of the panel
+    const startX = ev.clientX, startW = r.width;
+    sp.classList.add('dragging'); document.body.classList.add('resizing');
+    sp.setPointerCapture(ev.pointerId);
+    const move = e => setSideWidth(sideOnRight ? startW + (startX - e.clientX) : startW + (e.clientX - startX), false);
+    const up = e => {
+      sp.releasePointerCapture(ev.pointerId);
+      sp.removeEventListener('pointermove', move); sp.removeEventListener('pointerup', up);
+      sp.classList.remove('dragging'); document.body.classList.remove('resizing');
+      setSideWidth(side.getBoundingClientRect().width, true);
+    };
+    sp.addEventListener('pointermove', move); sp.addEventListener('pointerup', up);
+  });
+  sp.addEventListener('dblclick', () => setSideWidth(SIDE_W_DEFAULT, true));
+  window.addEventListener('resize', () => setSideWidth(side.getBoundingClientRect().width, false));
+}
+function nudgeSide(d) {
+  const side = document.getElementById('side');
+  setSideWidth(side.getBoundingClientRect().width + d, true);
+  showPdfPageToast('רוחב הפאנל: ' + Math.round(side.getBoundingClientRect().width) + 'px');
+}
+// ===== Quick comment buttons (Z / X / C / B …). Editable, remembered per browser. =====
+const PHRASES_KEY = 'moodleGraderPhrases';
+const PHRASE_KEYS = ['KeyZ','KeyX','KeyC','KeyB','KeyM'];
+const PHRASE_LABELS = ['Z','X','C','B','M'];
+const PHRASES_DEFAULT = ['מצוין', 'מעולה', 'הרוב נכון אבל...'];
+function getPhrases() {
+  try { const p = JSON.parse(localStorage.getItem(PHRASES_KEY)); if (Array.isArray(p) && p.length) return p.slice(0, PHRASE_KEYS.length); } catch (e) {}
+  return PHRASES_DEFAULT.slice();
+}
+function insertPhrase(ph) {
+  const s = state.students[state.currentIdx]; if (!s) return;
+  const n = document.getElementById('notes-input');
+  const open = /(\.\.\.|…)\s*$/.test(ph);              // "…" = keep typing after it
+  const text = open ? ph.replace(/(\.\.\.|…)\s*$/, '').trimEnd() + ' ' : ph;
+  const cur = n.value;
+  n.value = cur ? cur.replace(/\s*$/, '') + (open ? '\n' : ' ') + text : text;
+  s._interacted = true;
+  n.dispatchEvent(new Event('input'));
+  saveCurrent();
+  if (open) focusNotes();
+}
+function renderPhrases() {
+  const bar = document.getElementById('phrase-bar'); if (!bar) return;
+  bar.innerHTML = '';
+  getPhrases().forEach((ph, i) => {
+    const b = document.createElement('button'); b.tabIndex = -1;
+    b.innerHTML = '<kbd>' + PHRASE_LABELS[i] + '</kbd>';
+    b.appendChild(document.createTextNode(ph));
+    b.onclick = () => { insertPhrase(ph); b.blur(); };
+    bar.appendChild(b);
+  });
+  const ed = document.createElement('button'); ed.className = 'edit'; ed.tabIndex = -1; ed.textContent = '✏️'; ed.title = 'עריכת הכפתורים';
+  ed.onclick = () => {
+    const t = prompt('כפתורי הערות — מופרדים ב- | (עד 5). סיום ב-... = ממשיכים לכתוב אחריו:', getPhrases().join(' | '));
+    if (t === null) return;
+    const list = t.split('|').map(x => x.trim()).filter(Boolean).slice(0, PHRASE_KEYS.length);
+    try { if (list.length) localStorage.setItem(PHRASES_KEY, JSON.stringify(list)); else localStorage.removeItem(PHRASES_KEY); } catch (e) {}
+    renderPhrases(); ed.blur();
+  };
+  bar.appendChild(ed);
+}
+// ===== Keep the keyboard on the grader. Clicking the PDF hands focus to Chrome's PDF viewer,
+// which swallows every key after that. Take it straight back (scrolling the PDF with the
+// trackpad/mouse still works; it doesn't need focus).
+function focusSink() { const k = document.getElementById('kbd-sink'); if (k) k.focus({ preventScroll: true }); }
+function initFocusGuard() {
+  window.addEventListener('blur', () => {
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (a && a.tagName === 'IFRAME') { a.blur(); window.focus(); focusSink(); }
+    }, 0);
+  });
+}
+function toggleHelp(show) {
+  const o = document.getElementById('help-overlay'); if (!o) return;
+  const on = show === undefined ? o.style.display !== 'flex' : show;
+  o.style.display = on ? 'flex' : 'none';
+}
+function helpOpen() { const o = document.getElementById('help-overlay'); return o && o.style.display === 'flex'; }
+function focusNotes() {
+  const n = document.getElementById('notes-input'); n.focus();
+  n.setSelectionRange(n.value.length, n.value.length);
+}
+function focusGrade() { const g = document.getElementById('grade-input'); g.focus(); g.select(); }
+// A typo'd grade (e.g. 70 in a 0/50/100 course) must not be silently left behind.
+function blockIfInvalid() {
+  const v = (document.getElementById('grade-input').value || '').trim();
+  if (v === '' || gradeValid(v)) return false;
+  showPdfPageToast('⚠️ ציון לא תקין: ' + v + ' — לחצי 1 / 5 / 0 או G');
+  markGradeInvalid(true);
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  return true;
+}
+function jumpNextUngraded() {
+  saveCurrent();
+  const n = state.students.length;
+  for (let d = 1; d <= n; d++) {
+    const k = (state.currentIdx + d) % n, st = state.students[k].status;
+    if (st !== 'graded' && st !== 'no_submission' && st !== 'extension') {
+      (typeof showStudentEmbedded === 'function' && window.__EMBEDDED_DATA ? showStudentEmbedded : showStudent)(k);
+      return;
+    }
+  }
+  alert('🎉 כל הסטודנטים נבדקו');
+}
+// Letter shortcuts use e.code (the physical key), so they work when the keyboard is in Hebrew.
 function handleShortcut(e) {
-  // Only when grader is visible
   if (document.getElementById('grader').style.display === 'none') return;
-  // Cmd/Ctrl+Enter always = save & next (works even from inputs)
+  if (e.isComposing) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  const inField = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+  if (helpOpen()) {
+    if (e.key === 'Escape' || e.code === 'KeyH' || e.code === 'Slash' || e.key === 'Enter') { e.preventDefault(); toggleHelp(false); }
+    return;
+  }
+  // Cmd/Ctrl+Enter = save & next, from anywhere (including the notes box)
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
+    if (blockIfInvalid()) return;
+    if (inField) e.target.blur();
     document.getElementById('next-btn').click();
     return;
   }
-  // Don't intercept regular keys when user is typing in a text field
-  const tag = (e.target.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'textarea') return;
+  if (inField) {
+    // Esc (or Tab out of the notes) = back to grading mode; text is already auto-saved
+    if (e.key === 'Escape' || (e.key === 'Tab' && !e.shiftKey && e.target.id === 'notes-input')) {
+      e.preventDefault(); saveCurrent(); e.target.blur(); syncQuickGrade(); return;
+    }
+    if (e.key === 'Tab' && e.shiftKey && e.target.id === 'notes-input') { e.preventDefault(); focusGrade(); return; }
+    // Enter in the grade box = save & next (Enter in the notes box stays a newline)
+    if (e.key === 'Enter' && e.target.id === 'grade-input') {
+      e.preventDefault(); if (blockIfInvalid()) return; e.target.blur(); document.getElementById('next-btn').click(); return;
+    }
+    return; // normal typing
+  }
   if (e.altKey || e.ctrlKey || e.metaKey) return;
 
-  const scheme = state.gradingScheme;
-  // Enter (without modifier) = save + next
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    document.getElementById('next-btn').click();
-    return;
-  }
-  // RTL nav: left arrow = forward (next), right arrow = back (prev)
-  if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('next-btn').click(); return; }
-  if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('prev-btn').click(); return; }
-  if (e.key === ' ') { e.preventDefault(); document.getElementById('skip-btn').click(); return; }
+  const c = e.code, k = e.key;
+  if (k === 'Enter') { e.preventDefault(); if (!blockIfInvalid()) document.getElementById('next-btn').click(); return; }
+  if (k === 'ArrowLeft')  { e.preventDefault(); document.getElementById('next-btn').click(); return; }
+  if (k === 'ArrowRight') { e.preventDefault(); document.getElementById('prev-btn').click(); return; }
+  if (k === ' ') { e.preventDefault(); document.getElementById('skip-btn').click(); return; }
+  if (k === 'Tab' || c === 'KeyN') { e.preventDefault(); focusNotes(); return; }
+  if (c === 'KeyG') { e.preventDefault(); focusGrade(); return; }
+  if (c === 'KeyU') { e.preventDefault(); jumpNextUngraded(); return; }
+  if (c === 'KeyV') { e.preventDefault(); pdfToggleFit(); return; }
+  const pi = PHRASE_KEYS.indexOf(c);
+  if (pi >= 0) { const ph = getPhrases()[pi]; if (ph) { e.preventDefault(); insertPhrase(ph); return; } }
+  if (c === 'BracketRight') { e.preventDefault(); nudgeSide(+40); return; }
+  if (c === 'BracketLeft')  { e.preventDefault(); nudgeSide(-40); return; }
+  if (c === 'Backslash')    { e.preventDefault(); setSideWidth(SIDE_W_DEFAULT, true); showPdfPageToast('רוחב ברירת מחדל'); return; }
+  if (c === 'KeyH' || c === 'Slash') { e.preventDefault(); toggleHelp(true); return; }
+  if (k === 'ArrowDown' || k === 'PageDown' || c === 'KeyJ') { e.preventDefault(); pdfPageStep(+1); return; }
+  if (k === 'ArrowUp'   || k === 'PageUp'   || c === 'KeyK') { e.preventDefault(); pdfPageStep(-1); return; }
 
-  // W = open solution (or questions) in a separate window
-  if (e.key.toLowerCase() === 'w') {
-    const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
-    if (aux.solution || aux.questions) {
-      e.preventDefault();
-      __autoOpenedAux = true;
-      openAuxWindow(aux.solution ? 'solution' : 'questions');
-      return;
+  const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
+  if (c === 'KeyW' && (aux.solution || aux.questions)) {
+    e.preventDefault(); __autoOpenedAux = true; openAuxWindow(aux.solution ? 'solution' : 'questions'); return;
+  }
+  if (c === 'KeyS' || c === 'KeyQ' || c === 'KeyA') {
+    const view = c === 'KeyQ' ? 'questions' : c === 'KeyA' ? 'solution' : 'student';
+    if (view === 'student' || aux[view]) {
+      e.preventDefault(); __pdfView = view; applyPdfView(state.students[state.currentIdx]); return;
     }
   }
 
-  // PDF view switcher (S = student, Q = questions, A = solution)
-  const k = e.key.toLowerCase();
-  if (k === 's' || k === 'q' || k === 'a') {
-    const view = (k === 'q') ? 'questions' : (k === 'a') ? 'solution' : 'student';
-    const aux = (window.__EMBEDDED_DATA && window.__EMBEDDED_DATA.auxFiles) || {};
-    if (view === 'student' || (view === 'questions' && aux.questions) || (view === 'solution' && aux.solution)) {
-      e.preventDefault();
-      __pdfView = view;
-      applyPdfView(state.students[state.currentIdx]);
-      return;
+  // Grade keys (digits are the same on Hebrew and English layouts; numpad works too)
+  const set = QG_SETS[curScheme()];
+  if (set) {
+    const digit = /^Digit\d$|^Numpad\d$/.test(c) ? c.slice(-1) : null;
+    let v = null;
+    if (curScheme() === 'pass_fail') {
+      if (digit === '1' || c === 'KeyP') v = 'עובר';
+      else if (digit === '0' || c === 'KeyF') v = 'לא עובר';
+    } else {
+      const o = set.find(o => o.k === digit); if (o) v = o.v;
     }
-  }
-
-  // Per-scheme quick keys
-  if (scheme === 'binary_0_100') {
-    if (e.key === '1') { e.preventDefault(); document.getElementById('qg-pos').click(); }
-    else if (e.key === '0') { e.preventDefault(); document.getElementById('qg-neg').click(); }
-  } else if (scheme === 'pass_fail') {
-    const k = e.key.toLowerCase();
-    if (k === '1' || k === 'p') { e.preventDefault(); document.getElementById('qg-pos').click(); }
-    else if (k === '0' || k === 'f') { e.preventDefault(); document.getElementById('qg-neg').click(); }
+    if (v !== null) { e.preventDefault(); setQuickGrade(v); }
   }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  initSplitter();
+  renderPhrases();
+  initFocusGuard();
+  { const ho = document.getElementById('help-overlay'); if (ho) ho.addEventListener('click', () => toggleHelp(false)); }
   // === Embedded mode shortcut ===
   if (window.__EMBEDDED_DATA) {
     // Show questions/solution tabs if available; wire up clicks
@@ -1126,8 +1354,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (aux.questions) { winQ.style.display = ''; winQ.onclick = () => { __autoOpenedAux = true; openAuxWindow('questions'); }; }
       // Auto-open the solution in a separate window on the first user gesture
       const gestureOpen = () => { autoOpenSolutionOnce(); if (__autoOpenedAux) { document.removeEventListener('keydown', gestureOpen); document.removeEventListener('click', gestureOpen); } };
-      document.addEventListener('keydown', gestureOpen);
-      document.addEventListener('click', gestureOpen);
+      // (auto-opening the solution window on the first key was removed: the new window took
+      //  keyboard focus, so every shortcut after it went nowhere. W opens it on demand.)
+      void gestureOpen;
     }
     // Wire up nav buttons that work in embedded mode (use showStudentEmbedded instead)
     document.getElementById('next-btn').onclick = () => {
@@ -1157,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let timer;
     const debounce = () => { clearTimeout(timer); timer = setTimeout(saveCurrent, 600); };
     const markInput = () => { const s = state.students[state.currentIdx]; if (s) s._interacted = true; };
-    document.getElementById('grade-input').addEventListener('input', () => { markInput(); debounce(); });
+    document.getElementById('grade-input').addEventListener('input', () => { markInput(); debounce(); syncQuickGrade(); });
     document.getElementById('notes-input').addEventListener('input', () => { markInput(); debounce(); });
     document.addEventListener('keydown', e => handleShortcut(e));
     // Override list item click handler in renderList() — re-bind via a wrapper:
@@ -1232,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let timer;
   const debounce = () => { clearTimeout(timer); timer = setTimeout(saveCurrent, 600); };
   const markInput = () => { const s = state.students[state.currentIdx]; if (s) s._interacted = true; };
-  document.getElementById('grade-input').addEventListener('input', () => { markInput(); debounce(); });
+  document.getElementById('grade-input').addEventListener('input', () => { markInput(); debounce(); syncQuickGrade(); });
   document.getElementById('notes-input').addEventListener('input', () => { markInput(); debounce(); });
 
   // Keyboard shortcuts
@@ -1276,5 +1505,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 </script>
+<div id="help-overlay"><div class="box">
+<b>⌨️ קיצורי מקלדת</b> (עובדים גם כשהמקלדת בעברית)<br>
+<kbd>1</kbd> / <kbd>5</kbd> / <kbd>0</kbd> — ציון (100 / 50 / 0 · או עובר/לא עובר)<br>
+<kbd>N</kbd> או <kbd>Tab</kbd> — כתיבת הערה · <kbd>Esc</kbd> — יציאה מההערה<br>
+<kbd>G</kbd> — הקלדת ציון ידנית<br>
+<kbd>Z</kbd> / <kbd>X</kbd> / <kbd>C</kbd> — כפתורי ההערות (מצוין / מעולה / הרוב נכון אבל...) · ✏️ לעריכה<br>
+<kbd>Enter</kbd> — שמור והבא · <kbd>⌘</kbd>+<kbd>Enter</kbd> — שמור והבא גם מתוך הערה<br>
+<kbd>←</kbd> הבא · <kbd>→</kbd> הקודם · <kbd>U</kbd> — הבא שלא נבדק · <kbd>Space</kbd> — דלג<br>
+<kbd>↓</kbd>/<kbd>↑</kbd> או <kbd>J</kbd>/<kbd>K</kbd> — עמוד הבא/קודם ב-PDF · <kbd>V</kbd> — רוחב מלא / עמוד שלם<br>
+<kbd>]</kbd> / <kbd>[</kbd> — פאנל רחב/צר יותר · <kbd>\</kbd> איפוס (או גרירת הפס האמצעי)<br>
+<kbd>S</kbd> הגשה · <kbd>Q</kbd> שאלות · <kbd>A</kbd> פתרון · <kbd>W</kbd> פתרון בחלון נפרד<br>
+<kbd>H</kbd> או <kbd>?</kbd> — חלון זה · <kbd>Esc</kbd> — סגירה
+</div></div>
 </body>
 </html>
