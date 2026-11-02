@@ -131,6 +131,11 @@
   #help-overlay .box { background: white; border-radius: 12px; padding: 18px 22px; max-width: 460px; font-size: 13px; line-height: 1.9; direction: rtl; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
   #help-overlay kbd { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; padding: 1px 6px; font-family: monospace; }
   .status-flag { margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  #phrase-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  #phrase-bar button { padding: 5px 10px; font-size: 13px; border-radius: 14px; border: 1px solid var(--border-strong); background: white; color: var(--text); cursor: pointer; }
+  #phrase-bar button:hover { background: var(--accent-soft); border-color: var(--accent); }
+  #phrase-bar button kbd { font-family: monospace; font-size: 10px; opacity: .55; margin-right: 4px; }
+  #phrase-bar button.edit { border-style: dashed; color: var(--muted); padding: 5px 8px; }
   .kbd-hint { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
   .kbd-hint kbd { background: white; border: 1px solid var(--border-strong); border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 11px; color: var(--accent-deep); }
   .student-item .has-note-dot { display: inline-block; width: 8px; height: 8px; background: var(--teal); border-radius: 50%; margin-left: 6px; }
@@ -253,8 +258,10 @@
 
     <div class="grade-block">
       <label>✏️ הערות שלך</label>
+      <div id="phrase-bar"></div>
       <textarea id="notes-input" placeholder="הערות לסטודנט..."></textarea>
     </div>
+    <div id="kbd-sink" tabindex="-1" style="position:absolute;width:0;height:0;overflow:hidden;outline:none;"></div>
 
     <div class="nav">
       <button class="small" id="back-to-setup-btn" title="חזרה להגדרות">↩</button>
@@ -429,7 +436,7 @@ function setupGradeUI(scheme, maxGrade) {
       b.onclick = () => { setQuickGrade(o.v); b.blur(); };
     });
     meta.textContent = scheme === 'three_level' ? '0 / 50 / 100' : scheme === 'pass_fail' ? 'עובר / לא עובר' : 'בינארי — 0 או 100';
-    if (hint) hint.innerHTML = 'ציון ← <kbd>N</kbd> הערה ← <kbd>Esc</kbd> ← <kbd>Enter</kbd> הבא · <kbd>H</kbd> = כל הקיצורים';
+    if (hint) hint.innerHTML = 'ציון ← <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> / <kbd>N</kbd> הערה ← <kbd>Esc</kbd> ← <kbd>Enter</kbd> הבא · <kbd>H</kbd> = כל הקיצורים';
   } else {
     qg.style.display = 'none';
     meta.innerHTML = 'מתוך <span id="max-display">' + (maxGrade || 100) + '</span>';
@@ -1158,6 +1165,59 @@ function nudgeSide(d) {
   setSideWidth(side.getBoundingClientRect().width + d, true);
   showPdfPageToast('רוחב הפאנל: ' + Math.round(side.getBoundingClientRect().width) + 'px');
 }
+// ===== Quick comment buttons (Z / X / C / B …). Editable, remembered per browser. =====
+const PHRASES_KEY = 'moodleGraderPhrases';
+const PHRASE_KEYS = ['KeyZ','KeyX','KeyC','KeyB','KeyM'];
+const PHRASE_LABELS = ['Z','X','C','B','M'];
+const PHRASES_DEFAULT = ['מצוין', 'מעולה', 'הרוב נכון אבל...'];
+function getPhrases() {
+  try { const p = JSON.parse(localStorage.getItem(PHRASES_KEY)); if (Array.isArray(p) && p.length) return p.slice(0, PHRASE_KEYS.length); } catch (e) {}
+  return PHRASES_DEFAULT.slice();
+}
+function insertPhrase(ph) {
+  const s = state.students[state.currentIdx]; if (!s) return;
+  const n = document.getElementById('notes-input');
+  const open = /(\.\.\.|…)\s*$/.test(ph);              // "…" = keep typing after it
+  const text = open ? ph.replace(/(\.\.\.|…)\s*$/, '').trimEnd() + ' ' : ph;
+  const cur = n.value;
+  n.value = cur ? cur.replace(/\s*$/, '') + (open ? '\n' : ' ') + text : text;
+  s._interacted = true;
+  n.dispatchEvent(new Event('input'));
+  saveCurrent();
+  if (open) focusNotes();
+}
+function renderPhrases() {
+  const bar = document.getElementById('phrase-bar'); if (!bar) return;
+  bar.innerHTML = '';
+  getPhrases().forEach((ph, i) => {
+    const b = document.createElement('button'); b.tabIndex = -1;
+    b.innerHTML = '<kbd>' + PHRASE_LABELS[i] + '</kbd>';
+    b.appendChild(document.createTextNode(ph));
+    b.onclick = () => { insertPhrase(ph); b.blur(); };
+    bar.appendChild(b);
+  });
+  const ed = document.createElement('button'); ed.className = 'edit'; ed.tabIndex = -1; ed.textContent = '✏️'; ed.title = 'עריכת הכפתורים';
+  ed.onclick = () => {
+    const t = prompt('כפתורי הערות — מופרדים ב- | (עד 5). סיום ב-... = ממשיכים לכתוב אחריו:', getPhrases().join(' | '));
+    if (t === null) return;
+    const list = t.split('|').map(x => x.trim()).filter(Boolean).slice(0, PHRASE_KEYS.length);
+    try { if (list.length) localStorage.setItem(PHRASES_KEY, JSON.stringify(list)); else localStorage.removeItem(PHRASES_KEY); } catch (e) {}
+    renderPhrases(); ed.blur();
+  };
+  bar.appendChild(ed);
+}
+// ===== Keep the keyboard on the grader. Clicking the PDF hands focus to Chrome's PDF viewer,
+// which swallows every key after that. Take it straight back (scrolling the PDF with the
+// trackpad/mouse still works; it doesn't need focus).
+function focusSink() { const k = document.getElementById('kbd-sink'); if (k) k.focus({ preventScroll: true }); }
+function initFocusGuard() {
+  window.addEventListener('blur', () => {
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (a && a.tagName === 'IFRAME') { a.blur(); window.focus(); focusSink(); }
+    }, 0);
+  });
+}
 function toggleHelp(show) {
   const o = document.getElementById('help-overlay'); if (!o) return;
   const on = show === undefined ? o.style.display !== 'flex' : show;
@@ -1232,6 +1292,8 @@ function handleShortcut(e) {
   if (c === 'KeyG') { e.preventDefault(); focusGrade(); return; }
   if (c === 'KeyU') { e.preventDefault(); jumpNextUngraded(); return; }
   if (c === 'KeyV') { e.preventDefault(); pdfToggleFit(); return; }
+  const pi = PHRASE_KEYS.indexOf(c);
+  if (pi >= 0) { const ph = getPhrases()[pi]; if (ph) { e.preventDefault(); insertPhrase(ph); return; } }
   if (c === 'BracketRight') { e.preventDefault(); nudgeSide(+40); return; }
   if (c === 'BracketLeft')  { e.preventDefault(); nudgeSide(-40); return; }
   if (c === 'Backslash')    { e.preventDefault(); setSideWidth(SIDE_W_DEFAULT, true); showPdfPageToast('רוחב ברירת מחדל'); return; }
@@ -1267,6 +1329,8 @@ function handleShortcut(e) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   initSplitter();
+  renderPhrases();
+  initFocusGuard();
   { const ho = document.getElementById('help-overlay'); if (ho) ho.addEventListener('click', () => toggleHelp(false)); }
   // === Embedded mode shortcut ===
   if (window.__EMBEDDED_DATA) {
@@ -1290,8 +1354,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (aux.questions) { winQ.style.display = ''; winQ.onclick = () => { __autoOpenedAux = true; openAuxWindow('questions'); }; }
       // Auto-open the solution in a separate window on the first user gesture
       const gestureOpen = () => { autoOpenSolutionOnce(); if (__autoOpenedAux) { document.removeEventListener('keydown', gestureOpen); document.removeEventListener('click', gestureOpen); } };
-      document.addEventListener('keydown', gestureOpen);
-      document.addEventListener('click', gestureOpen);
+      // (auto-opening the solution window on the first key was removed: the new window took
+      //  keyboard focus, so every shortcut after it went nowhere. W opens it on demand.)
+      void gestureOpen;
     }
     // Wire up nav buttons that work in embedded mode (use showStudentEmbedded instead)
     document.getElementById('next-btn').onclick = () => {
@@ -1445,6 +1510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 <kbd>1</kbd> / <kbd>5</kbd> / <kbd>0</kbd> — ציון (100 / 50 / 0 · או עובר/לא עובר)<br>
 <kbd>N</kbd> או <kbd>Tab</kbd> — כתיבת הערה · <kbd>Esc</kbd> — יציאה מההערה<br>
 <kbd>G</kbd> — הקלדת ציון ידנית<br>
+<kbd>Z</kbd> / <kbd>X</kbd> / <kbd>C</kbd> — כפתורי ההערות (מצוין / מעולה / הרוב נכון אבל...) · ✏️ לעריכה<br>
 <kbd>Enter</kbd> — שמור והבא · <kbd>⌘</kbd>+<kbd>Enter</kbd> — שמור והבא גם מתוך הערה<br>
 <kbd>←</kbd> הבא · <kbd>→</kbd> הקודם · <kbd>U</kbd> — הבא שלא נבדק · <kbd>Space</kbd> — דלג<br>
 <kbd>↓</kbd>/<kbd>↑</kbd> או <kbd>J</kbd>/<kbd>K</kbd> — עמוד הבא/קודם ב-PDF · <kbd>V</kbd> — רוחב מלא / עמוד שלם<br>
