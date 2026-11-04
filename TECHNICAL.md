@@ -41,7 +41,7 @@ Choosing a grade does **not** jump to the next student, so a note can still be a
 | `1` / `5` / `0` | Grade 100 / 50 / 0 (three_level); `1`/`0` for binary; `1`/`P`, `0`/`F` for pass/fail |
 | `N` or `Tab` | Write a note · `Esc` (or `Tab`) leaves the note box |
 | `G` | Type a grade by hand |
-| `Z` / `X` / `C` (/ `B` / `M`) | Quick comment buttons (default מצוין / מעולה / הרוב נכון אבל...). A phrase ending in `...` drops you into the note to keep typing. ✏️ edits them. |
+| `Z` `X` `C` `B` `M` `E` `R` `T` `Y` `D` `L` `I` `O` | Quick comment buttons (up to 13; each button shows its key and the Hebrew letter on that key). Defaults are the most-used past notes. A phrase ending in `...` drops you into the note to keep typing. ✏️ edits them. |
 | `Enter` | Save & next (blocked if the grade is invalid) · `Cmd/Ctrl+Enter` works from inside a note |
 | `←` / `→` | Next / previous (RTL) · `U` = next ungraded · `Space` = skip |
 | `↓` / `↑`, `J` / `K`, PgDn / PgUp | Next / previous PDF page (the grader never focuses the PDF viewer, which would swallow keys) |

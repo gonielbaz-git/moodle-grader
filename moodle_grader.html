@@ -134,7 +134,10 @@
   #phrase-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
   #phrase-bar button { padding: 5px 10px; font-size: 13px; border-radius: 14px; border: 1px solid var(--border-strong); background: white; color: var(--text); cursor: pointer; }
   #phrase-bar button:hover { background: var(--accent-soft); border-color: var(--accent); }
-  #phrase-bar button kbd { font-family: monospace; font-size: 10px; opacity: .55; margin-right: 4px; }
+  #phrase-bar button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 5px; }
+  #phrase-bar .pk { display: inline-flex; align-items: center; gap: 3px; background: var(--accent-deep); color: white; border-radius: 6px; padding: 2px 6px; line-height: 1.2; }
+  #phrase-bar .pk b { font: 700 13px/1.2 ui-monospace, Menlo, monospace; }
+  #phrase-bar .pk i { font-style: normal; font-size: 11px; opacity: .75; }
   #phrase-bar button.edit { border-style: dashed; color: var(--muted); padding: 5px 8px; }
   .kbd-hint { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center; }
   .kbd-hint kbd { background: white; border: 1px solid var(--border-strong); border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 11px; color: var(--accent-deep); }
@@ -436,7 +439,7 @@ function setupGradeUI(scheme, maxGrade) {
       b.onclick = () => { setQuickGrade(o.v); b.blur(); };
     });
     meta.textContent = scheme === 'three_level' ? '0 / 50 / 100' : scheme === 'pass_fail' ? 'עובר / לא עובר' : 'בינארי — 0 או 100';
-    if (hint) hint.innerHTML = 'ציון ← <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> / <kbd>N</kbd> הערה ← <kbd>Esc</kbd> ← <kbd>Enter</kbd> הבא · <kbd>H</kbd> = כל הקיצורים';
+    if (hint) hint.innerHTML = 'ציון ← כפתור הערה / <kbd>N</kbd> הערה ← <kbd>Esc</kbd> ← <kbd>Enter</kbd> הבא · <kbd>H</kbd> = כל הקיצורים';
   } else {
     qg.style.display = 'none';
     meta.innerHTML = 'מתוך <span id="max-display">' + (maxGrade || 100) + '</span>';
@@ -1167,12 +1170,24 @@ function nudgeSide(d) {
 }
 // ===== Quick comment buttons (Z / X / C / B …). Editable, remembered per browser. =====
 const PHRASES_KEY = 'moodleGraderPhrases';
-const PHRASE_KEYS = ['KeyZ','KeyX','KeyC','KeyB','KeyM'];
-const PHRASE_LABELS = ['Z','X','C','B','M'];
-const PHRASES_DEFAULT = ['מצוין', 'מעולה', 'הרוב נכון אבל...'];
+// Physical keys not used by any other shortcut, with the Hebrew letter printed on the same key.
+const PHRASE_KEYS   = ['KeyZ','KeyX','KeyC','KeyB','KeyM','KeyE','KeyR','KeyT','KeyY','KeyD','KeyL','KeyI','KeyO'];
+const PHRASE_LABELS = ['Z','X','C','B','M','E','R','T','Y','D','L','I','O'];
+const PHRASE_HEB    = ['ז','ס','ב','נ','צ','ק','ר','א','ט','ג','ך','ן','ם'];
+// Defaults = the notes used most in past grading.
+const PHRASES_DEFAULT = ['מצוין', 'מעולה', 'הרוב נכון אבל...', 'יפה מאוד', 'נכון מאוד', 'כל הכבוד', 'נכון', 'מהמם', 'עבודה טובה', 'חסרה דרך', 'נראה נכון אבל...'];
+const PHRASES_VER_KEY = 'moodleGraderPhrasesVer', PHRASES_VER = 2;
 function getPhrases() {
-  try { const p = JSON.parse(localStorage.getItem(PHRASES_KEY)); if (Array.isArray(p) && p.length) return p.slice(0, PHRASE_KEYS.length); } catch (e) {}
-  return PHRASES_DEFAULT.slice();
+  let saved = null;
+  try { const p = JSON.parse(localStorage.getItem(PHRASES_KEY)); if (Array.isArray(p) && p.length) saved = p; } catch (e) {}
+  if (!saved) return PHRASES_DEFAULT.slice(0, PHRASE_KEYS.length);
+  // One-time upgrade: keep the user's own list (and its order), append new defaults after it.
+  let ver = 0; try { ver = +localStorage.getItem(PHRASES_VER_KEY) || 0; } catch (e) {}
+  if (ver < PHRASES_VER) {
+    PHRASES_DEFAULT.forEach(d => { if (!saved.includes(d)) saved.push(d); });
+    try { localStorage.setItem(PHRASES_KEY, JSON.stringify(saved.slice(0, PHRASE_KEYS.length))); localStorage.setItem(PHRASES_VER_KEY, String(PHRASES_VER)); } catch (e) {}
+  }
+  return saved.slice(0, PHRASE_KEYS.length);
 }
 function insertPhrase(ph) {
   const s = state.students[state.currentIdx]; if (!s) return;
@@ -1180,7 +1195,8 @@ function insertPhrase(ph) {
   const open = /(\.\.\.|…)\s*$/.test(ph);              // "…" = keep typing after it
   const text = open ? ph.replace(/(\.\.\.|…)\s*$/, '').trimEnd() + ' ' : ph;
   const cur = n.value;
-  n.value = cur ? cur.replace(/\s*$/, '') + (open ? '\n' : ' ') + text : text;
+  const base = cur.replace(/\s*$/, '');
+  n.value = !base ? text : base + (open ? '\n' : (/[.,!?:;]$/.test(base) ? ' ' : ', ')) + text;
   s._interacted = true;
   n.dispatchEvent(new Event('input'));
   saveCurrent();
@@ -1191,17 +1207,20 @@ function renderPhrases() {
   bar.innerHTML = '';
   getPhrases().forEach((ph, i) => {
     const b = document.createElement('button'); b.tabIndex = -1;
-    b.innerHTML = '<kbd>' + PHRASE_LABELS[i] + '</kbd>';
+    const k = document.createElement('span'); k.className = 'pk';
+    k.innerHTML = '<b>' + PHRASE_LABELS[i] + '</b><i>' + PHRASE_HEB[i] + '</i>';
+    b.appendChild(k);
     b.appendChild(document.createTextNode(ph));
+    b.title = 'מקש ' + PHRASE_LABELS[i] + ' (בעברית: ' + PHRASE_HEB[i] + ')';
     b.onclick = () => { insertPhrase(ph); b.blur(); };
     bar.appendChild(b);
   });
   const ed = document.createElement('button'); ed.className = 'edit'; ed.tabIndex = -1; ed.textContent = '✏️'; ed.title = 'עריכת הכפתורים';
   ed.onclick = () => {
-    const t = prompt('כפתורי הערות — מופרדים ב- | (עד 5). סיום ב-... = ממשיכים לכתוב אחריו:', getPhrases().join(' | '));
+    const t = prompt('כפתורי הערות — מופרדים ב- | (עד ' + PHRASE_KEYS.length + ', לפי הסדר: ' + PHRASE_LABELS.join(' ') + '). סיום ב-... = ממשיכים לכתוב אחריו:', getPhrases().join(' | '));
     if (t === null) return;
     const list = t.split('|').map(x => x.trim()).filter(Boolean).slice(0, PHRASE_KEYS.length);
-    try { if (list.length) localStorage.setItem(PHRASES_KEY, JSON.stringify(list)); else localStorage.removeItem(PHRASES_KEY); } catch (e) {}
+    try { if (list.length) localStorage.setItem(PHRASES_KEY, JSON.stringify(list)); else localStorage.removeItem(PHRASES_KEY); localStorage.setItem(PHRASES_VER_KEY, String(PHRASES_VER)); } catch (e) {}
     renderPhrases(); ed.blur();
   };
   bar.appendChild(ed);
@@ -1510,7 +1529,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 <kbd>1</kbd> / <kbd>5</kbd> / <kbd>0</kbd> — ציון (100 / 50 / 0 · או עובר/לא עובר)<br>
 <kbd>N</kbd> או <kbd>Tab</kbd> — כתיבת הערה · <kbd>Esc</kbd> — יציאה מההערה<br>
 <kbd>G</kbd> — הקלדת ציון ידנית<br>
-<kbd>Z</kbd> / <kbd>X</kbd> / <kbd>C</kbd> — כפתורי ההערות (מצוין / מעולה / הרוב נכון אבל...) · ✏️ לעריכה<br>
+כפתורי ההערות — האות מופיעה על כל כפתור (<kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd> <kbd>B</kbd> <kbd>M</kbd> <kbd>E</kbd> <kbd>R</kbd> …) · ✏️ לעריכה<br>
 <kbd>Enter</kbd> — שמור והבא · <kbd>⌘</kbd>+<kbd>Enter</kbd> — שמור והבא גם מתוך הערה<br>
 <kbd>←</kbd> הבא · <kbd>→</kbd> הקודם · <kbd>U</kbd> — הבא שלא נבדק · <kbd>Space</kbd> — דלג<br>
 <kbd>↓</kbd>/<kbd>↑</kbd> או <kbd>J</kbd>/<kbd>K</kbd> — עמוד הבא/קודם ב-PDF · <kbd>V</kbd> — רוחב מלא / עמוד שלם<br>
